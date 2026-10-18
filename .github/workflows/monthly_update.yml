@@ -1,0 +1,32 @@
+name: Monthly data & model update
+
+on:
+  schedule:
+    - cron: "0 6 3 * *"      # 3rd of every month, 06:00 UTC (month-end data + COT release available)
+  workflow_dispatch: {}      # manual "Run workflow" button
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Tests (synthetic data)
+        run: pytest -q
+      - name: Run pipeline on live data
+        run: python scripts/run_pipeline.py --source yahoo
+      - name: Commit results (Streamlit Cloud redeploys on push)
+        run: |
+          git config user.name  "cfl-bot"
+          git config user.email "cfl-bot@users.noreply.github.com"
+          git add data/results
+          git diff --cached --quiet || git commit -m "Monthly update $(date -u +%Y-%m-%d)"
+          git push
