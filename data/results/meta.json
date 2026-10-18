@@ -1,0 +1,26 @@
+{
+  "source": "yahoo",
+  "run_utc": "2026-10-18T19:53:31+00:00",
+  "signal_date": "2026-10-16",
+  "first_oos": "2011-02-28",
+  "n_assets": 26,
+  "features": [
+    "rev_1m",
+    "mom_3m",
+    "mom_6m",
+    "mom_12_1",
+    "vol_3m",
+    "skew_6m",
+    "max_1m",
+    "hp",
+    "hp_z3y",
+    "spec_net",
+    "spec_net_chg_3m",
+    "oi_chg_3m"
+  ],
+  "cot": true,
+  "carry": false,
+  "refit_every": 12,
+  "quantile": 0.3333333333333333,
+  "importance_model": "Ridge"
+}
