@@ -1,10 +1,19 @@
-# Oral — session 7, 5 minutes, 3 slides
+# Oral — session 7 (intermediate checkpoint): 5 minutes, 3 slides
 
-**Slide 1 — The question (1 min)**
-"Can ML beat the classic commodity factors?" Show the universe (26 futures, 5 sectors) and the 3 known premia: momentum, carry, hedging pressure. Close with why it matters: this is how commodity trading desks think about positioning.
+Goal: pitch the idea and the planned structure. No final results expected.
 
-**Slide 2 — The machine (2 min)**
-One pipeline diagram: Yahoo/Bloomberg + CFTC COT → 14 features → walk-forward ML (Ridge, RF, GBM, MLP, ensemble) → long/short book → self-updating Streamlit app. Keep one bullet on avoiding look-ahead (COT release lag, expanding window).
+**Slide 1 — Idea & motivation (1 min 30)**
+- Question: can ML combine known commodity risk premia (momentum, carry, hedging pressure, speculative positioning) into a better cross-sectional signal than each factor alone?
+- Why it is original: most projects stay on equities and Fama-French factors. Commodities add a dimension specific to futures: the CFTC positioning data (who holds what).
+- Why it matters: this is how commodity trading houses think about positioning (career link).
 
-**Slide 3 — First results & roadmap (2 min)**
-Show the equity curve of the ensemble vs single factors, plus the OOS Sharpe/IC table and the top 3 features. Then the roadmap to December: Bloomberg carry, robustness tests, SHAP, macro regimes. Live-demo the URL if possible.
+**Slide 2 — Planned structure / pipeline (2 min)**
+One left-to-right diagram:
+Data (Bloomberg generic 1st/2nd contracts + CFTC COT, 26 futures, 2006→) → 14 features, ranked cross-sectionally → walk-forward ML (Ridge, RF, GBM, MLP, ensemble) → long/short portfolio with costs & vol target → self-updating Streamlit app (monthly GitHub Action).
+One bullet on rigour: no look-ahead (COT release lag, expanding window).
+
+**Slide 3 — Status & roadmap to 31 Dec (1 min 30)**
+- Done: pipeline, app skeleton, automated monthly update (show the URL / a screenshot).
+- First lesson: free Yahoo data gives no exploitable signal (front-month prices ≠ futures returns, no carry), so the project is switching to Bloomberg.
+- Next: Bloomberg data and carry → robustness tests (costs, buckets, sub-periods) → explainability (feature importance / SHAP) → possibly macro regimes → report.
+- Open question for the professor: frequency (monthly vs weekly), and whether the COT should also be used as a timing signal.
