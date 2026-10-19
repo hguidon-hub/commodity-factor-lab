@@ -3,7 +3,7 @@
 **Machine learning for the cross-section of commodity futures returns**: momentum, carry, hedging pressure and CFTC positioning, combined by ML models and evaluated strictly out-of-sample. The dashboard updates itself every month.
 
 > emlyon MSc in Finance — *Machine Learning for Factor Investing* (G. Coqueret), 2026–27 project.
-> Live app: `https://<your-app>.streamlit.app` · Author: Hugo Guidon
+> **🔗 Live app: [commodity-factor-lab.streamlit.app](https://commodity-factor-lab.streamlit.app)** · Author: Hugo Guidon
 
 ## What it does
 1. **Data**: 26 futures (energy, metals, grains, softs, livestock) from Yahoo Finance or a Bloomberg export, plus the weekly **CFTC Commitments of Traders** report.
