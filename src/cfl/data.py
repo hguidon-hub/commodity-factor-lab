@@ -118,6 +118,85 @@ def download_cot(start_year: int | None = None, end_year: int | None = None,
     return out.sort_values(["ticker", "date"]).drop_duplicates(["ticker", "date"]).reset_index(drop=True)
 
 
+COT_DISAGG_URL = "https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip"
+COT_DISAGG_HIST_URL = "https://www.cftc.gov/files/dea/history/fut_disagg_txt_hist_2006_2016.zip"
+
+
+def _norm(c: str) -> str:
+    return c.lower().replace("_", "").replace(" ", "").replace("-", "")
+
+
+def _find_disagg(cols: list[str], *keys: str) -> str:
+    """Disaggregated report column whose normalised name contains all keys and ends with 'all'.
+
+    Excludes the 'Old'/'Other' crop-year splits, changes, % of OI and trader counts.
+    """
+    for c in cols:
+        n = _norm(c)
+        if (all(k in n for k in keys) and n.endswith("all")
+                and not n.startswith(("change", "pct", "traders"))):
+            return c
+    raise KeyError(keys)
+
+
+def _parse_disagg(raw: pd.DataFrame) -> pd.DataFrame:
+    """Standardise one disaggregated file (column names vary slightly across CFTC files)."""
+    cols = list(raw.columns)
+    date_col = next(c for c in cols if "yyyy-mm-dd" in c.lower())
+    code_col = next(c for c in cols if "contract" in c.lower() and "code" in c.lower())
+    return pd.DataFrame({
+        "date": pd.to_datetime(raw[date_col]),
+        "code": raw[code_col].astype(str).str.strip().str.zfill(6),
+        "pm_long": raw[_find_disagg(cols, "prodmerc", "long")],
+        "pm_short": raw[_find_disagg(cols, "prodmerc", "short")],
+        "swap_long": raw[_find_disagg(cols, "swap", "long")],
+        "swap_short": raw[_find_disagg(cols, "swap", "short")],
+        "mm_long": raw[_find_disagg(cols, "mmoney", "long")],
+        "mm_short": raw[_find_disagg(cols, "mmoney", "short")],
+        "conc4_long": raw[_find_disagg(cols, "concgrossle4", "long")],
+        "conc4_short": raw[_find_disagg(cols, "concgrossle4", "short")],
+        "oi_d": raw[next(c for c in cols if _norm(c) == "openinterestall")],
+    })
+
+
+def download_cot_disagg(start_year: int | None = None, end_year: int | None = None,
+                        cache_dir: Path = RAW_DIR) -> pd.DataFrame:
+    """Disaggregated 'Futures Only' COT report (2006+): producers/merchants, swap dealers,
+    managed money, plus the concentration of the 4 largest traders.
+
+    Returns long format [date, ticker, pm_long, pm_short, swap_long, swap_short,
+    mm_long, mm_short, conc4_long, conc4_short, oi_d].
+    """
+    import requests
+
+    end_year = end_year or date.today().year
+    code_to_ticker = {c.cot_code: c.yf for c in UNIVERSE if c.cot_code}
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    # CFTC ships 2006-2016 as one historical file, then one file per year
+    files = [("fut_disagg_hist_2006_2016.zip", COT_DISAGG_HIST_URL, 2016)]
+    files += [(f"fut_disagg_{y}.zip", COT_DISAGG_URL.format(year=y), y) for y in range(2017, end_year + 1)]
+    frames = []
+    for name, url, last_year in files:
+        f = cache_dir / name
+        if not f.exists() or last_year >= end_year:          # current year is always refreshed
+            resp = requests.get(url, timeout=120, headers={"User-Agent": "Mozilla/5.0 (research project)"})
+            if resp.status_code == 404 and last_year >= end_year:   # new year not published yet
+                continue
+            resp.raise_for_status()
+            f.write_bytes(resp.content)
+        with zipfile.ZipFile(f) as z:
+            for member in z.namelist():
+                with z.open(member) as fh:
+                    frames.append(pd.read_csv(io.TextIOWrapper(fh, encoding="latin-1"), low_memory=False))
+    out = pd.concat([_parse_disagg(raw) for raw in frames], ignore_index=True)
+    for c in out.columns[2:]:
+        out[c] = pd.to_numeric(out[c], errors="coerce")
+    out["ticker"] = out["code"].map(code_to_ticker)
+    out = out.dropna(subset=["ticker"]).drop(columns="code")
+    out = out[out["date"] >= pd.Timestamp(f"{start_year or 2006}-01-01")]
+    return out.sort_values(["ticker", "date"]).drop_duplicates(["ticker", "date"]).reset_index(drop=True)
+
+
 # --------------------------------------------------------------------------- synthetic
 def make_synthetic(n_years: int = 18, seed: int = 0) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Synthetic market with a KNOWN, weak predictive structure (for tests / offline demo).
@@ -160,10 +239,19 @@ def make_synthetic(n_years: int = 18, seed: int = 0) -> tuple[pd.DataFrame, pd.D
         cs = oi * 0.5 * (1 - share)
         sl = oi * 0.3 * (1 - share) + rng.uniform(0, 1e4, n)
         ss = oi * 0.3 * share + rng.uniform(0, 1e4, n)
+        # disaggregated split: producers ~ 60% of commercials, swaps the rest; managed money ~ specs
+        mm_l = sl * 0.8 + rng.uniform(0, 5e3, n)
+        mm_s = ss * 0.8 + rng.uniform(0, 5e3, n)
+        c4l = 20 + 10 * rng.random(n)
+        c4s = 20 + 10 * rng.random(n)
         for j, tk in enumerate(TICKERS):
-            rows.append((d, tk, cl[j], cs[j], sl[j], ss[j], oi[j]))
+            rows.append((d, tk, cl[j], cs[j], sl[j], ss[j], oi[j],
+                         0.6 * cl[j], 0.6 * cs[j], 0.4 * cl[j], 0.4 * cs[j],
+                         mm_l[j], mm_s[j], c4l[j], c4s[j], oi[j]))
     cot = pd.DataFrame(rows, columns=["date", "ticker", "comm_long", "comm_short",
-                                      "spec_long", "spec_short", "oi"])
+                                      "spec_long", "spec_short", "oi",
+                                      "pm_long", "pm_short", "swap_long", "swap_short",
+                                      "mm_long", "mm_short", "conc4_long", "conc4_short", "oi_d"])
     return px, px2, cot
 
 

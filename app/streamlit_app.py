@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from cfl import backtest as bt                  # noqa: E402
 from cfl.config import SECTOR, UNIVERSE         # noqa: E402
-from cfl.features import FEATURE_DOC            # noqa: E402
+from cfl.features import FEATURE_DOC, feature_group   # noqa: E402
 
 st.set_page_config(page_title="Commodity Factor Lab", page_icon="🛢️", layout="wide")
 
@@ -58,7 +58,7 @@ strategies_all = [c for c in P.columns if c != "fwd_ret"] + ["EW long-only"]
 # ------------------------------------------------------------------ sidebar
 with st.sidebar:
     st.title("🛢️ Commodity Factor Lab")
-    st.caption("Machine learning for cross-sectional commodity futures returns")
+    st.caption("Does trader positioning (CFTC) help machine learning predict commodity returns?")
     if RES == DEMO:
         st.warning("Running on **synthetic demo data**. Run the pipeline with `--source yahoo` for live results.")
     st.markdown(f"**Signal date:** {meta['signal_date']}  \n**Last run:** {meta['run_utc'][:16]} UTC  \n"
@@ -78,8 +78,45 @@ rets, turns = run_portfolios(str(RES), q, tc, inv_vol, 0.10 if vt else None)
 ic_cols = [c for c in ic.columns]
 table = bt.summary(rets, turns, ic)
 
-tab_perf, tab_live, tab_diag, tab_fact, tab_method = st.tabs(
-    ["📈 Performance", "🎯 This month's book", "🔬 Model diagnostics", "🧭 Factor explorer", "📚 Methodology"])
+tab_pos, tab_perf, tab_live, tab_diag, tab_fact, tab_method = st.tabs(
+    ["🧪 Does positioning help?", "📈 Performance", "🎯 This month's book", "🔬 Model diagnostics",
+     "🧭 Factor explorer", "📚 Methodology"])
+
+# ------------------------------------------------------------------ research question
+with tab_pos:
+    st.subheader("Same models, three information sets")
+    st.caption("Each model is trained walk-forward on price features only, on CFTC positioning features only, "
+               "or on both. The gap between the bars is what positioning adds out-of-sample.")
+    rows = []
+    for m in ["Ridge", "GBM"]:
+        for label, name in [("Price only", f"{m} [price only]"), ("Positioning only", f"{m} [positioning only]"),
+                            ("Price + positioning", m)]:
+            if name in table.index:
+                rows.append({"Model": m, "Information set": label, "Mean IC": table.loc[name, "Mean IC"],
+                             "IC t-stat": table.loc[name, "IC t-stat"], "Sharpe": table.loc[name, "Sharpe"]})
+    abl = pd.DataFrame(rows)
+    if abl.empty:
+        st.info("Ablation results not available in this run.")
+    else:
+        c1, c2 = st.columns(2)
+        order = {"Information set": ["Price only", "Positioning only", "Price + positioning"]}
+        c1.plotly_chart(px.bar(abl, x="Model", y="Mean IC", color="Information set", barmode="group",
+                               category_orders=order, color_discrete_sequence=PALETTE, title="Mean OOS rank IC")
+                        .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h", y=-0.2)),
+                        use_container_width=True)
+        c2.plotly_chart(px.bar(abl, x="Model", y="Sharpe", color="Information set", barmode="group",
+                               category_orders=order, color_discrete_sequence=PALETTE, title="Long/short Sharpe (net of costs)")
+                        .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h", y=-0.2)),
+                        use_container_width=True)
+        st.dataframe(abl.set_index(["Model", "Information set"]).style.format("{:.3f}"), use_container_width=True)
+        st.caption("Rule of thumb: |IC t-stat| < 2 means the signal is statistically indistinguishable from noise.")
+    gbm_sets = [c for c in ["GBM [price only]", "GBM [positioning only]", "GBM"] if c in ic.columns]
+    if gbm_sets:
+        st.subheader("Rolling 24-month IC — GBM")
+        st.plotly_chart(px.line(ic[gbm_sets].rolling(24).mean(), color_discrete_sequence=PALETTE,
+                                labels={"value": "Spearman IC", "index": "", "variable": ""})
+                        .add_hline(y=0, line_dash="dot").update_layout(height=340, legend=dict(orientation="h")),
+                        use_container_width=True)
 
 # ------------------------------------------------------------------ performance
 with tab_perf:
@@ -92,7 +129,11 @@ with tab_perf:
     c4.metric("Max drawdown", f"{table.loc[best, 'Max DD']:.1%}")
     c5.metric("Mean IC", f"{table.loc[best, 'Mean IC']:.3f}" if pd.notna(table.loc[best].get("Mean IC")) else "–")
 
-    default = [s for s in ["Ensemble", best, "Momentum 12-1", "Hedging pressure", "Carry", "EW long-only"]
+    st.info("Returns are built from Yahoo continuous front-month prices: roll yield is not captured, so "
+            "absolute performance (and the long-only line in particular) is an approximation. Cross-sectional "
+            "comparisons between signals are more reliable than levels.", icon="⚠️")
+    default = [s for s in ["Ensemble", best, "Momentum 12-1", "Hedging pressure", "Managed money contrarian",
+                           "Carry", "EW long-only"]
                if s in rets.columns]
     sel = st.multiselect("Strategies", strategies_all, default=list(dict.fromkeys(default)))
     wealth = (1 + rets[sel].fillna(0)).cumprod()
@@ -154,10 +195,12 @@ with tab_diag:
     with c2:
         st.subheader(f"Feature importance ({meta.get('importance_model', 'best model')})")
         st.caption("Drop in mean OOS IC when the feature is shuffled within each month.")
-        d = imp.rename(index=lambda f: f"{f} — {FEATURE_DOC.get(f, '')}").sort_values()
-        st.plotly_chart(px.bar(d, orientation="h", color_discrete_sequence=PALETTE[1:],
-                               labels={"value": "IC drop", "index": ""})
-                        .update_layout(showlegend=False, height=380, margin=dict(l=10)),
+        d = imp.sort_values().rename("IC drop").to_frame()
+        d["Group"] = [feature_group(f) for f in d.index]
+        d.index = [f"{f} — {FEATURE_DOC.get(f, '')}" for f in d.index]
+        st.plotly_chart(px.bar(d, x="IC drop", y=d.index, color="Group", orientation="h",
+                               color_discrete_sequence=PALETTE, labels={"y": ""})
+                        .update_layout(height=520, margin=dict(l=10), legend=dict(orientation="h")),
                         use_container_width=True)
     st.subheader("Signal correlation (average cross-sectional rank correlation)")
     sigs = [c for c in P.columns if c != "fwd_ret"]

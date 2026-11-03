@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: "0 6 3 * *"      # 3rd of every month, 06:00 UTC (month-end data + COT release available)
   workflow_dispatch: {}      # manual "Run workflow" button
+  push:                      # re-run the models when the code changes (bot commits only touch data/)
+    branches: [main]
+    paths: ["src/**", "scripts/**", "requirements.txt", ".github/workflows/**"]
 
 permissions:
   contents: write
@@ -29,4 +32,5 @@ jobs:
           git config user.email "cfl-bot@users.noreply.github.com"
           git add data/results
           git diff --cached --quiet || git commit -m "Monthly update $(date -u +%Y-%m-%d)"
+          git pull --rebase origin main
           git push

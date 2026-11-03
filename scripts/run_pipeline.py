@@ -22,7 +22,10 @@ from cfl import backtest as bt                      # noqa: E402
 from cfl import data as dl                          # noqa: E402
 from cfl.config import RESULTS_DIR, UNIVERSE        # noqa: E402
 from cfl.features import build_panel                # noqa: E402
-from cfl.models import BENCHMARKS, model_zoo        # noqa: E402
+from cfl.models import BENCHMARKS, MAIN_MODELS, ablation_zoo, model_zoo   # noqa: E402
+
+
+WARNINGS: list[str] = []      # surfaced in meta.json (CI logs are not public)
 
 
 def get_data(source: str, bbg: str | None):
@@ -37,8 +40,16 @@ def get_data(source: str, bbg: str | None):
     try:
         cot = dl.download_cot()
     except Exception as e:  # CFTC down -> price-only model, flagged in meta
-        print(f"[warn] COT download failed: {e}")
+        print(f"[warn] COT legacy download failed: {e}")
+        WARNINGS.append(f"COT legacy: {e!r}"[:300])
         cot = None
+    try:
+        dis = dl.download_cot_disagg()
+        print(f"disaggregated COT: {len(dis)} rows, {dis['ticker'].nunique()} markets")
+        cot = dis if cot is None else cot.merge(dis, on=["date", "ticker"], how="outer")
+    except Exception as e:  # keep the legacy report only
+        print(f"[warn] COT disaggregated download failed: {e!r}")
+        WARNINGS.append(f"COT disaggregated: {e!r}"[:300])
     dl.save(px, "prices")
     if cot is not None:
         cot.to_csv(dl.RAW_DIR / "cot.csv.gz", index=False)
@@ -59,8 +70,9 @@ def main(argv=None):
     feats = panel.attrs["features"]
     print(f"panel: {panel.shape}, {panel.index.get_level_values('date').nunique()} months, features={feats}")
 
-    P = bt.walk_forward(panel, model_zoo(), refit_every=a.refit_every, verbose=True)
-    strategies = list(model_zoo()) + ["Ensemble"] + [b for b in BENCHMARKS if b in P.columns]
+    zoo = model_zoo() | ablation_zoo(panel.attrs["price_features"], panel.attrs["positioning_features"])
+    P = bt.walk_forward(panel, zoo, refit_every=a.refit_every, verbose=True)
+    strategies = list(zoo) + ["Ensemble"] + [b for b in BENCHMARKS if b in P.columns]
     vol = panel["raw_vol_3m"]
     rets, turns = bt.portfolio_returns(P, strategies, q=a.quantile, inv_vol=vol)
     rets_vt = bt.vol_target(rets)
@@ -71,7 +83,7 @@ def main(argv=None):
     oos = panel[panel.index.get_level_values("date") >= P.attrs["last_refit"]]
     if oos["fwd_ret"].notna().groupby(level="date").any().sum() < 6:   # too short -> last 36m
         oos = panel[panel.index.get_level_values("date") >= panel.index.get_level_values("date").unique()[-37]]
-    ml = list(model_zoo())
+    ml = MAIN_MODELS
     best = ic[ml].mean().idxmax()            # explain the model with the best OOS IC
     imp = bt.permutation_ic_importance(P.attrs["last_models"][best], oos, feats)
 
@@ -107,10 +119,14 @@ def main(argv=None):
         "n_assets": int(panel.index.get_level_values("ticker").nunique()),
         "features": feats,
         "cot": cot is not None,
+        "cot_disaggregated": bool(cot is not None and "mm_long" in cot.columns),
+        "price_features": panel.attrs["price_features"],
+        "positioning_features": panel.attrs["positioning_features"],
         "carry": px2 is not None,
         "refit_every": a.refit_every,
         "quantile": a.quantile,
         "importance_model": best,
+        "warnings": WARNINGS,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     print(table.round(3).to_string())

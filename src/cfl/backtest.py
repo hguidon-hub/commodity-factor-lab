@@ -33,20 +33,24 @@ def walk_forward(panel: pd.DataFrame, models: dict | None = None, refit_every: i
             lo = dates[max(0, i - window)] if window else dates[0]
             tr = panel.loc[(panel.index.get_level_values("date") >= lo)
                            & (panel.index.get_level_values("date") < t)].dropna(subset=[label])
-            X, y = tr[feats].values, tr[label].values
-            fitted = {k: clone(m).fit(X, y) for k, m in models.items()}
+            y = tr[label].values
+            fitted = {}
+            for k, spec in models.items():
+                est, fs = spec if isinstance(spec, tuple) else (spec, feats)
+                fitted[k] = (clone(est).fit(tr[fs].values, y), fs)
             last_refit = t
             if verbose:
                 print(f"refit {t:%Y-%m}  n_train={len(tr)}")
         te = panel.xs(t, level="date", drop_level=False)
         out = pd.DataFrame(index=te.index)
-        for k, m in fitted.items():
-            out[k] = m.predict(te[feats].values)
+        for k, (m, fs) in fitted.items():
+            out[k] = m.predict(te[fs].values)
         preds.append(out)
     P = pd.concat(preds)
     # ensemble = average of cross-sectional ranks (robust to different output scales)
     ranks = P.groupby(level="date").rank(pct=True)
-    P["Ensemble"] = ranks[list(models)].mean(axis=1)
+    main = [k for k, spec in models.items() if not isinstance(spec, tuple)]
+    P["Ensemble"] = ranks[main].mean(axis=1)
     for name, (col, sign) in BENCHMARKS.items():
         if col in panel.columns:
             P[name] = sign * panel.loc[P.index, col]
@@ -147,6 +151,8 @@ def summary(rets: pd.DataFrame, turns: pd.DataFrame, ic: pd.DataFrame | None = N
 # --------------------------------------------------------------------------- explainability
 def permutation_ic_importance(model, panel: pd.DataFrame, feats: list[str], n_repeats: int = 5,
                               seed: int = 0) -> pd.Series:
+    if isinstance(model, tuple):          # (estimator, features) as stored by walk_forward
+        model, feats = model
     """Drop in mean IC when a feature is shuffled within each month (OOS-style importance)."""
     rng = np.random.default_rng(seed)
     data = panel.dropna(subset=["fwd_ret"])

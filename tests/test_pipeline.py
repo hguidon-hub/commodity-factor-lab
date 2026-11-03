@@ -20,7 +20,8 @@ def _panel():
 def test_panel_shape_and_ranges():
     p = _panel()
     f = p.attrs["features"]
-    assert {"hp", "carry", "mom_12_1"} <= set(f)
+    assert {"hp", "carry", "mom_12_1", "mm_net", "mm_crowding", "pm_net", "conc4_long"} <= set(f)
+    assert set(p.attrs["price_features"]) | set(p.attrs["positioning_features"]) == set(f)
     assert p[f].min().min() > 0 and p[f].max().max() <= 1
     assert not p[f].isna().any().any()
 
@@ -45,3 +46,21 @@ def test_walk_forward_and_portfolio():
     assert all(abs(l - 1) < 1e-9 and abs(sh + 1) < 1e-9 for l, sh in s)
     tab = bt.summary(rets, turns)
     assert "Sharpe" in tab.columns
+
+
+def test_ablation_uses_its_own_feature_set():
+    from cfl.models import ablation_zoo
+    p = _panel()
+    zoo = {"Ridge": Ridge(alpha=10)} | ablation_zoo(p.attrs["price_features"], p.attrs["positioning_features"])
+    P = bt.walk_forward(p, zoo, refit_every=24, min_train=36)
+    fitted = P.attrs["last_models"]
+    assert fitted["Ridge [price only]"][1] == p.attrs["price_features"]
+    assert fitted["GBM [positioning only]"][1] == p.attrs["positioning_features"]
+    assert "Ensemble" in P and P["Ridge [price only]"].notna().all()
+
+
+def test_incomplete_month_dropped():
+    from cfl.features import _month_ends
+    idx = pd.bdate_range("2024-01-01", "2024-03-05")
+    me = _month_ends(idx)
+    assert me[-1] == pd.Timestamp("2024-02-29")

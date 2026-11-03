@@ -3,6 +3,10 @@
 Every feature is known at the month-end close t; the label is the return over month t+1.
 Features are uniformised cross-sectionally (rank -> [0, 1]) as in Coqueret & Guida (2020),
 which removes scale and outlier issues and makes all models comparable.
+
+Two feature groups drive the research question ("does positioning add information?"):
+  PRICE        : built from prices only
+  POSITIONING  : built from the CFTC Commitments of Traders (legacy + disaggregated reports)
 """
 from __future__ import annotations
 
@@ -12,10 +16,13 @@ import pandas as pd
 from .config import SECTOR
 from .data import clean_roll_jumps
 
-PRICE_FEATURES = ["rev_1m", "mom_3m", "mom_6m", "mom_12_1", "vol_3m", "skew_6m", "max_1m"]
-CARRY_FEATURES = ["carry", "carry_chg_3m"]
-COT_FEATURES = ["hp", "hp_z3y", "spec_net", "spec_net_chg_3m", "oi_chg_3m"]
-ALL_FEATURES = PRICE_FEATURES + CARRY_FEATURES + COT_FEATURES
+PRICE_FEATURES = ["rev_1m", "mom_3m", "mom_6m", "mom_12_1", "vol_3m", "skew_6m", "max_1m",
+                  "carry", "carry_chg_3m"]          # carry only with a 2nd-contract source
+LEGACY_COT = ["hp", "hp_z3y", "spec_net", "spec_net_chg_3m", "oi_chg_3m"]
+DISAGG_COT = ["mm_net", "mm_net_z3y", "mm_net_chg_1m", "mm_crowding", "pm_net", "pm_net_z3y",
+              "swap_net", "conc4_long", "conc4_net"]
+POSITIONING_FEATURES = LEGACY_COT + DISAGG_COT
+ALL_FEATURES = PRICE_FEATURES + POSITIONING_FEATURES
 
 FEATURE_DOC = {
     "rev_1m": "Last month return (short-term reversal)",
@@ -27,17 +34,34 @@ FEATURE_DOC = {
     "max_1m": "Max daily return last month (lottery effect)",
     "carry": "Roll yield ln(F1/F2) (needs 2nd contract)",
     "carry_chg_3m": "3-month change in carry",
-    "hp": "Hedging pressure: commercials' long share (CFTC)",
+    "hp": "Hedging pressure: commercials' long share",
     "hp_z3y": "Hedging pressure, z-score vs own 3y history",
-    "spec_net": "Speculators' net position / open interest",
-    "spec_net_chg_3m": "3-month change in speculators' net position",
+    "spec_net": "Non-commercials' net position / open interest",
+    "spec_net_chg_3m": "3-month change in non-commercials' net position",
     "oi_chg_3m": "3-month log change in open interest",
+    "mm_net": "Managed money (hedge funds, CTAs) net position / OI",
+    "mm_net_z3y": "Managed money net, z-score vs own 3y history",
+    "mm_net_chg_1m": "1-month change in managed money net position",
+    "mm_crowding": "Managed money net, percentile of own 3y range (crowding)",
+    "pm_net": "Producers & merchants net position / OI",
+    "pm_net_z3y": "Producers & merchants net, z-score vs own 3y history",
+    "swap_net": "Swap dealers (index & OTC flows) net position / OI",
+    "conc4_long": "Share of longs held by the 4 largest traders",
+    "conc4_net": "Top-4 long share minus top-4 short share",
 }
 
 
+def feature_group(f: str) -> str:
+    return "Positioning" if f in POSITIONING_FEATURES else "Price"
+
+
 def _month_ends(idx: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    """Last trading day of each month; the current month is dropped while still incomplete."""
     s = pd.Series(idx, index=idx)
-    return pd.DatetimeIndex(s.groupby(idx.to_period("M")).max().values)
+    me = pd.DatetimeIndex(s.groupby(idx.to_period("M")).max().values)
+    if len(me) and (pd.offsets.BMonthEnd().rollforward(me[-1]) - me[-1]).days > 3:
+        me = me[:-1]
+    return me
 
 
 def price_features(px: pd.DataFrame, px2: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -68,23 +92,54 @@ def price_features(px: pd.DataFrame, px2: pd.DataFrame | None = None) -> tuple[p
     return long, ret_m
 
 
+def _z(s: pd.Series, n: int = 36) -> pd.Series:
+    m = s.rolling(n, min_periods=n // 2)
+    return (s - m.mean()) / m.std()
+
+
+def _pct_range(s: pd.Series, n: int = 36) -> pd.Series:
+    lo, hi = s.rolling(n, min_periods=n // 2).min(), s.rolling(n, min_periods=n // 2).max()
+    return (s - lo) / (hi - lo)
+
+
 def cot_features(cot: pd.DataFrame, month_ends: pd.DatetimeIndex) -> pd.DataFrame:
     """COT positions as known at each month end (report of Tuesday, public on Friday => +3 days)."""
     c = cot.copy()
     c["avail"] = pd.to_datetime(c["date"]) + pd.Timedelta(days=3)
-    c["hp"] = c["comm_long"] / (c["comm_long"] + c["comm_short"])
-    c["spec_net"] = (c["spec_long"] - c["spec_short"]) / c["oi"]
+    raw_cols = []
+    if {"comm_long", "comm_short", "spec_long", "spec_short", "oi"} <= set(c.columns):
+        c["hp"] = c["comm_long"] / (c["comm_long"] + c["comm_short"])
+        c["spec_net"] = (c["spec_long"] - c["spec_short"]) / c["oi"]
+        c["log_oi"] = np.log(c["oi"])
+        raw_cols += ["hp", "spec_net", "log_oi"]
+    disagg = {"mm_long", "mm_short", "pm_long", "pm_short", "swap_long", "swap_short", "oi_d"} <= set(c.columns)
+    if disagg:
+        c["mm_net"] = (c["mm_long"] - c["mm_short"]) / c["oi_d"]
+        c["pm_net"] = (c["pm_long"] - c["pm_short"]) / c["oi_d"]
+        c["swap_net"] = (c["swap_long"] - c["swap_short"]) / c["oi_d"]
+        c["conc4_long"] = c["conc4_long"] / 100
+        c["conc4_net"] = c["conc4_long"] - c["conc4_short"] / 100
+        raw_cols += ["mm_net", "pm_net", "swap_net", "conc4_long", "conc4_net"]
+
     out = []
     for tk, g in c.groupby("ticker"):
-        g = g.set_index("avail").sort_index()[["hp", "spec_net", "oi"]]
+        g = g.set_index("avail").sort_index()[raw_cols]
+        g = g[~g.index.duplicated(keep="last")]
         m = g.reindex(g.index.union(month_ends)).ffill(limit=10).reindex(month_ends)
-        m["hp_z3y"] = (m["hp"] - m["hp"].rolling(36, min_periods=18).mean()) / m["hp"].rolling(36, min_periods=18).std()
-        m["spec_net_chg_3m"] = m["spec_net"].diff(3)
-        m["oi_chg_3m"] = np.log(m["oi"]).diff(3)
+        if "hp" in m:
+            m["hp_z3y"] = _z(m["hp"])
+            m["spec_net_chg_3m"] = m["spec_net"].diff(3)
+            m["oi_chg_3m"] = m["log_oi"].diff(3)
+            m = m.drop(columns="log_oi")
+        if disagg:
+            m["mm_net_z3y"] = _z(m["mm_net"])
+            m["mm_net_chg_1m"] = m["mm_net"].diff(1)
+            m["mm_crowding"] = _pct_range(m["mm_net"])
+            m["pm_net_z3y"] = _z(m["pm_net"])
         m["ticker"] = tk
-        out.append(m.drop(columns="oi"))
+        out.append(m)
     f = pd.concat(out).rename_axis("date").reset_index().set_index(["date", "ticker"])
-    return f
+    return f.replace([np.inf, -np.inf], np.nan)
 
 
 def uniformise(df: pd.DataFrame) -> pd.DataFrame:
@@ -99,6 +154,7 @@ def build_panel(px: pd.DataFrame, px2: pd.DataFrame | None = None,
 
     Columns: raw features (prefixed 'raw_'), uniformised features, sector,
              fwd_ret (label, month t+1 return), fwd_rank (uniformised label).
+    attrs: features (all), price_features, positioning_features.
     """
     pf, ret_m = price_features(px, px2)
     me = ret_m.index
@@ -120,4 +176,6 @@ def build_panel(px: pd.DataFrame, px2: pd.DataFrame | None = None,
     out["fwd_ret"] = panel["fwd_ret"]
     out["fwd_rank"] = panel["fwd_ret"].groupby(level="date").rank(pct=True)
     out.attrs["features"] = feats
+    out.attrs["price_features"] = [f for f in feats if feature_group(f) == "Price"]
+    out.attrs["positioning_features"] = [f for f in feats if feature_group(f) == "Positioning"]
     return out.sort_index()
