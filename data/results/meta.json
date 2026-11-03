@@ -1,7 +1,7 @@
 {
   "source": "yahoo",
-  "run_utc": "2026-10-18T19:53:31+00:00",
-  "signal_date": "2026-10-16",
+  "run_utc": "2026-11-03T14:02:30+00:00",
+  "signal_date": "2026-11-03",
   "first_oos": "2011-02-28",
   "n_assets": 26,
   "features": [
