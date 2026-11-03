@@ -1,6 +1,6 @@
 {
   "source": "yahoo",
-  "run_utc": "2026-11-03T19:14:32+00:00",
+  "run_utc": "2026-11-03T19:30:15+00:00",
   "signal_date": "2026-10-30",
   "first_oos": "2011-02-28",
   "n_assets": 26,
@@ -16,10 +16,19 @@
     "hp_z3y",
     "spec_net",
     "spec_net_chg_3m",
-    "oi_chg_3m"
+    "oi_chg_3m",
+    "mm_net",
+    "mm_net_z3y",
+    "mm_net_chg_1m",
+    "mm_crowding",
+    "pm_net",
+    "pm_net_z3y",
+    "swap_net",
+    "conc4_long",
+    "conc4_net"
   ],
   "cot": true,
-  "cot_disaggregated": false,
+  "cot_disaggregated": true,
   "price_features": [
     "rev_1m",
     "mom_3m",
@@ -34,10 +43,20 @@
     "hp_z3y",
     "spec_net",
     "spec_net_chg_3m",
-    "oi_chg_3m"
+    "oi_chg_3m",
+    "mm_net",
+    "mm_net_z3y",
+    "mm_net_chg_1m",
+    "mm_crowding",
+    "pm_net",
+    "pm_net_z3y",
+    "swap_net",
+    "conc4_long",
+    "conc4_net"
   ],
   "carry": false,
   "refit_every": 12,
   "quantile": 0.3333333333333333,
-  "importance_model": "Ridge"
+  "importance_model": "Ridge",
+  "warnings": []
 }
