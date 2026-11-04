@@ -36,5 +36,9 @@ jobs:
           git config user.email "cfl-bot@users.noreply.github.com"
           git add data/results
           git diff --cached --quiet || git commit -m "Monthly update $(date -u +%Y-%m-%d)"
-          git pull --rebase origin main
-          git push
+          # GitHub occasionally answers a push with a 5xx: retry, rebasing on anything pushed meanwhile
+          for i in 1 2 3 4 5; do
+            git pull --rebase -X theirs origin main && git push && exit 0
+            echo "push failed (attempt $i), retrying in $((i * 20))s"; sleep $((i * 20))
+          done
+          exit 1

@@ -33,7 +33,8 @@ def download_prices(start: str = START_DATE, tickers: list[str] | None = None) -
     import time
 
     tickers = tickers or TICKERS
-    raw = yf.download(tickers, start=start, auto_adjust=True, progress=False, group_by="column")
+    # threads=False: parallel downloads can lock yfinance's local cache ("database is locked")
+    raw = yf.download(tickers, start=start, auto_adjust=True, progress=False, group_by="column", threads=False)
     px = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
     px = px.reindex(columns=tickers).sort_index()
     px.index = pd.to_datetime(px.index).tz_localize(None)
