@@ -26,7 +26,7 @@ jobs:
         run: pytest -q
       - name: Run pipeline on live data
         run: python scripts/run_pipeline.py --source yahoo
-      - name: Commit results (Streamlit Cloud redeploys on push)
+      - name: Commit results (Posit Connect Cloud republishes on push)
         run: |
           git config user.name  "cfl-bot"
           git config user.email "cfl-bot@users.noreply.github.com"
