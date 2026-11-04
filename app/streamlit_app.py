@@ -28,7 +28,8 @@ INK, MUTED, PAPER, CARD, LINE = "#1F2933", "#52606D", "#FFFDF8", "#FFFFFF", "#E6
 PALETTE = ["#E8590C", "#1C7ED6", "#2F9E44", "#AE3EC9", "#F59F00", "#0CA678", "#D6336C", "#5C7CFA", "#868E96"]
 SECTOR_COLORS = {"Energy": "#E8590C", "Metals": "#1C7ED6", "Grains": "#F59F00", "Softs": "#2F9E44",
                  "Livestock": "#AE3EC9"}
-SET_COLORS = {"Price only": "#1C7ED6", "Positioning only": "#E8590C", "Price + positioning": "#2F9E44"}
+SET_COLORS = {"Price only": "#1C7ED6", "Positioning only": "#E8590C", "Price + positioning": "#2F9E44",
+              "Best 6 signals (selected)": "#AE3EC9"}
 
 pio.templates["cfl"] = go.layout.Template(layout=dict(
     font=dict(family="Inter, -apple-system, Segoe UI, sans-serif", color=INK, size=13),
@@ -84,7 +85,8 @@ def load(res: str):
     live = pd.read_csv(r / "live_signals.csv", index_col=0)
     imp = pd.read_csv(r / "importance.csv", index_col=0).iloc[:, 0]
     ic = pd.read_csv(r / "ic.csv", index_col=0, parse_dates=True)
-    return meta, P, panel, live, imp, ic
+    sel = pd.read_csv(r / "selected_features.csv") if (r / "selected_features.csv").exists() else pd.DataFrame()
+    return meta, P, panel, live, imp, ic, sel
 
 
 @st.cache_data
@@ -98,7 +100,7 @@ def run_portfolios(res: str, q: float, tc: float, inv_vol: bool, target: float |
     return rets, turns
 
 
-meta, P, panel, live, imp, ic = load(str(RES))
+meta, P, panel, live, imp, ic, sel = load(str(RES))
 strategies_all = [c for c in P.columns if c != "fwd_ret"] + ["EW long-only"]
 
 # ------------------------------------------------------------------ sidebar
@@ -133,7 +135,7 @@ def ablation_rows() -> pd.DataFrame:
     rows = []
     for m in ["Ridge", "GBM"]:
         for label, name in [("Price only", f"{m} [price only]"), ("Positioning only", f"{m} [positioning only]"),
-                            ("Price + positioning", m)]:
+                            ("Price + positioning", m), ("Best 6 signals (selected)", f"{m} [selected 6]")]:
             if name in table.index:
                 rows.append({"Model": m, "Information set": label, "Mean IC": table.loc[name, "Mean IC"],
                              "IC t-stat": table.loc[name, "IC t-stat"], "Sharpe": table.loc[name, "Sharpe"]})
@@ -205,6 +207,11 @@ with tab_home:
                        "carries signal on its own but overlaps with prices rather than adding to them." if r["Positioning only"] > 0.02
                        else "adds little or nothing.")
                     )
+        if "Best 6 signals (selected)" in r:
+            verdict += (f" Letting the model keep only the 6 signals with the best past record gives "
+                        f"{r['Best 6 signals (selected)']:+.3f}: "
+                        + ("selection recovers the skill lost to too many inputs." if r["Best 6 signals (selected)"] > r["Price + positioning"] + 0.005
+                           else "selection does not help here."))
     except KeyError:
         pass
     if "EW long-only" in table.index:
@@ -501,3 +508,30 @@ with tab_fact:
 # ------------------------------------------------------------------ methodology
 with tab_method:
     st.markdown((ROOT / "docs" / "methodology.md").read_text())
+
+    if not sel.empty:
+        st.markdown("## Which signals did the selected model keep?")
+        st.markdown("Before each yearly refit, the selected Ridge keeps the 6 signals with the strongest track record "
+                    "**on the training data only** (highest |IC t-stat|), so no future information enters the choice. "
+                    "Signals that come back year after year are the robust ones.")
+        counts = sel["features"].str.split(", ").explode().value_counts().rename("Years selected").to_frame()
+        counts["Group"] = [feature_group(f) for f in counts.index]
+        counts["Meaning"] = [FEATURE_DOC.get(f, "") for f in counts.index]
+        st.dataframe(counts, width="stretch")
+        with st.expander("Selection at each refit"):
+            st.dataframe(sel.drop(columns="model").set_index("refit"), width="stretch")
+
+    chk = meta.get("cot_check") or {}
+    if chk:
+        st.markdown("## Data check: CFTC market matched to each ETF")
+        st.markdown("Each ETF is linked to the CFTC report of the futures contract it holds, through a 6-digit "
+                    "contract code. This table shows the market name actually found in the CFTC files, so a wrong "
+                    "code would be visible at a glance.")
+        rows_ = []
+        for tk, v in chk.items():
+            rows_.append({"ETF": NAMES.get(tk, tk), "CFTC market (latest name)": (v.get("disagg_names") or v.get("legacy_names") or ["–"])[0],
+                          "Weekly reports": v.get("weeks"), "From": v.get("first"), "To": v.get("last")})
+        missing = [NAMES.get(t, t) for t in NAMES if t not in chk]
+        st.dataframe(pd.DataFrame(rows_).set_index("ETF"), width="stretch")
+        if missing:
+            st.caption("No CFTC data (positioning set to neutral): " + ", ".join(missing))

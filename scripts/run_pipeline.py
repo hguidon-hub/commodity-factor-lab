@@ -22,7 +22,7 @@ from cfl import backtest as bt                      # noqa: E402
 from cfl import data as dl                          # noqa: E402
 from cfl.config import RESULTS_DIR, UNIVERSE        # noqa: E402
 from cfl.features import build_panel                # noqa: E402
-from cfl.models import BENCHMARKS, MAIN_MODELS, ablation_zoo, model_zoo   # noqa: E402
+from cfl.models import BENCHMARKS, MAIN_MODELS, ablation_zoo, model_zoo, selection_zoo   # noqa: E402
 
 
 WARNINGS: list[str] = []      # surfaced in meta.json (CI logs are not public)
@@ -59,6 +59,22 @@ def get_data(source: str, bbg: str | None):
     return px, px2, cot
 
 
+def cot_check(cot) -> dict:
+    """For each ETF: the CFTC market name(s) actually matched and the weeks of data (catches a wrong code)."""
+    if cot is None:
+        return {}
+    out = {}
+    for tk, g in cot.groupby("ticker"):
+        row = {"weeks": int(g["date"].nunique()), "first": str(pd.Timestamp(g["date"].min()).date()),
+               "last": str(pd.Timestamp(g["date"].max()).date())}
+        for col, key in [("market", "legacy_names"), ("market_d", "disagg_names")]:
+            if col in g:
+                names = g.sort_values("date")[col].dropna()
+                row[key] = list(dict.fromkeys(names[::-1]))[:3]      # most recent first
+        out[tk] = row
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", choices=["yahoo", "bloomberg", "synthetic"], default="yahoo")
@@ -73,7 +89,8 @@ def main(argv=None):
     feats = panel.attrs["features"]
     print(f"panel: {panel.shape}, {panel.index.get_level_values('date').nunique()} months, features={feats}")
 
-    zoo = model_zoo() | ablation_zoo(panel.attrs["price_features"], panel.attrs["positioning_features"])
+    zoo = (model_zoo() | ablation_zoo(panel.attrs["price_features"], panel.attrs["positioning_features"])
+           | selection_zoo(6))
     P = bt.walk_forward(panel, zoo, refit_every=a.refit_every, verbose=True)
     strategies = list(zoo) + ["Ensemble"] + [b for b in BENCHMARKS if b in P.columns]
     vol = panel["raw_vol_3m"]
@@ -114,6 +131,10 @@ def main(argv=None):
     imp.rename("ic_drop").to_csv(out / "importance.csv")
     live.sort_values("Ensemble", ascending=False).to_csv(out / "live_signals.csv")
     panel.to_csv(out / "panel.csv.gz")
+    # which features the selected Ridge kept at each refit (shown in the app)
+    sel = P.attrs.get("selections", {})
+    pd.DataFrame([{"model": m, "refit": str(d.date()), "features": ", ".join(fs)}
+                  for m, by in sel.items() for d, fs in by.items()]).to_csv(out / "selected_features.csv", index=False)
     meta = {
         "source": a.source,
         "run_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -130,6 +151,7 @@ def main(argv=None):
         "quantile": a.quantile,
         "importance_model": best,
         "warnings": WARNINGS,
+        "cot_check": cot_check(cot),
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     print(table.round(3).to_string())

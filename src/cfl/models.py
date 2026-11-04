@@ -46,6 +46,11 @@ def ablation_zoo(price_feats: list[str], pos_feats: list[str], seed: int = 42) -
     return zoo
 
 
+def selection_zoo(k: int = 6) -> dict:
+    """Ridge on the k signals with the best track record in each training window (no look-ahead)."""
+    return {f"Ridge [selected {k}]": {"est": _ridge(), "select_k": k}}
+
+
 MAIN_MODELS = ["Ridge", "RandomForest", "GBM", "MLP"]
 
 # Heuristic (non-ML) benchmark signals: name -> (column, sign) ; +1: high value = long

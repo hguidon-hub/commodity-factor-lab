@@ -122,6 +122,7 @@ def download_cot(start_year: int | None = None, end_year: int | None = None,
     raw = pd.concat(frames, ignore_index=True)
     cols = list(raw.columns)
     out = pd.DataFrame({
+        "market": raw[_find(cols, "market and exchange names")].astype(str).str.strip(),
         "date": pd.to_datetime(raw[_find(cols, "as of date", "yyyy-mm-dd")]),
         "code": raw[_find(cols, "cftc contract market code")].astype(str).str.strip().str.zfill(6),
         "spec_long": raw[_find(cols, "noncommercial", "long (all)")],
@@ -162,7 +163,9 @@ def _parse_disagg(raw: pd.DataFrame) -> pd.DataFrame:
     cols = list(raw.columns)
     date_col = next(c for c in cols if "yyyy-mm-dd" in c.lower())
     code_col = next(c for c in cols if "contract" in c.lower() and "code" in c.lower())
+    name_col = next(c for c in cols if _norm(c).startswith("marketandexchangenames"))
     return pd.DataFrame({
+        "market_d": raw[name_col].astype(str).str.strip(),
         "date": pd.to_datetime(raw[date_col]),
         "code": raw[code_col].astype(str).str.strip().str.zfill(6),
         "pm_long": raw[_find_disagg(cols, "prodmerc", "long")],
@@ -207,8 +210,8 @@ def download_cot_disagg(start_year: int | None = None, end_year: int | None = No
                 with z.open(member) as fh:
                     frames.append(pd.read_csv(io.TextIOWrapper(fh, encoding="latin-1"), low_memory=False))
     out = pd.concat([_parse_disagg(raw) for raw in frames], ignore_index=True)
-    for c in out.columns[2:]:
-        out[c] = pd.to_numeric(out[c], errors="coerce")
+    num = ["pm_long", "pm_short", "swap_long", "swap_short", "mm_long", "mm_short", "conc4_long", "conc4_short", "oi_d"]
+    out[num] = out[num].apply(pd.to_numeric, errors="coerce")
     out["ticker"] = out["code"].map(code_to_ticker)
     out = out.dropna(subset=["ticker"]).drop(columns="code")
     out = out[out["date"] >= pd.Timestamp(f"{start_year or 2006}-01-01")]

@@ -12,6 +12,18 @@ from .models import BENCHMARKS, model_zoo
 
 
 # --------------------------------------------------------------------------- predictions
+def select_features(tr: pd.DataFrame, feats: list[str], k: int, label: str = "fwd_rank") -> list[str]:
+    """The k features with the highest |t-stat| of their monthly rank IC on the TRAINING data only.
+
+    Uniformised features are already ranks, so a monthly Pearson correlation with the ranked label
+    is a Spearman IC. No future data enters the choice: `tr` holds only labels realised before t.
+    """
+    by_date = tr.groupby(level="date")
+    ics = pd.DataFrame({f: by_date.apply(lambda g, f=f: g[f].corr(g[label])) for f in feats})
+    t = ics.mean() / ics.std() * np.sqrt(ics.count())
+    return t.abs().sort_values(ascending=False).index[:k].tolist()
+
+
 def walk_forward(panel: pd.DataFrame, models: dict | None = None, refit_every: int = 12,
                  min_train: int = MIN_TRAIN_MONTHS, label: str = "fwd_rank",
                  window: int | None = None, verbose: bool = False) -> pd.DataFrame:
@@ -26,6 +38,7 @@ def walk_forward(panel: pd.DataFrame, models: dict | None = None, refit_every: i
     dates = panel.index.get_level_values("date").unique().sort_values()
     preds = []
     fitted: dict = {}
+    selections: dict = {}
     for i, t in enumerate(dates):
         if i < min_train:
             continue
@@ -36,7 +49,12 @@ def walk_forward(panel: pd.DataFrame, models: dict | None = None, refit_every: i
             y = tr[label].values
             fitted = {}
             for k, spec in models.items():
-                est, fs = spec if isinstance(spec, tuple) else (spec, feats)
+                if isinstance(spec, dict):            # {"est", "feats"?, "select_k"}: in-window selection
+                    fs = select_features(tr, spec.get("feats") or feats, spec["select_k"], label)
+                    est = spec["est"]
+                    selections.setdefault(k, {})[t] = fs
+                else:
+                    est, fs = spec if isinstance(spec, tuple) else (spec, feats)
                 fitted[k] = (clone(est).fit(tr[fs].values, y), fs)
             last_refit = t
             if verbose:
@@ -49,7 +67,7 @@ def walk_forward(panel: pd.DataFrame, models: dict | None = None, refit_every: i
     P = pd.concat(preds)
     # ensemble = average of cross-sectional ranks (robust to different output scales)
     ranks = P.groupby(level="date").rank(pct=True)
-    main = [k for k, spec in models.items() if not isinstance(spec, tuple)]
+    main = [k for k, spec in models.items() if not isinstance(spec, (tuple, dict))]
     P["Ensemble"] = ranks[main].mean(axis=1)
     for name, (col, sign) in BENCHMARKS.items():
         if col in panel.columns:
@@ -57,6 +75,7 @@ def walk_forward(panel: pd.DataFrame, models: dict | None = None, refit_every: i
     P["fwd_ret"] = panel.loc[P.index, "fwd_ret"]
     P.attrs["last_models"] = fitted
     P.attrs["last_refit"] = last_refit
+    P.attrs["selections"] = selections
     return P
 
 

@@ -64,3 +64,15 @@ def test_incomplete_month_dropped():
     idx = pd.bdate_range("2024-01-01", "2024-03-05")
     me = _month_ends(idx)
     assert me[-1] == pd.Timestamp("2024-02-29")
+
+
+def test_feature_selection_in_window():
+    from cfl.models import selection_zoo
+    p = _panel()
+    P = bt.walk_forward(p, selection_zoo(4), refit_every=24, min_train=36)
+    sel = P.attrs["selections"]["Ridge [selected 4]"]
+    assert sel and all(len(fs) == 4 and set(fs) <= set(p.attrs["features"]) for fs in sel.values())
+    # the first selection only uses data before the first refit date
+    first = min(sel)
+    tr = p[p.index.get_level_values("date") < first].dropna(subset=["fwd_rank"])
+    assert bt.select_features(tr, p.attrs["features"], 4) == sel[first]
