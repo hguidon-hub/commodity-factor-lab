@@ -9,5 +9,5 @@ Can machine learning tell which commodities will outperform next month, and does
 Data (13 commodity ETFs + CFTC positions) → factors (price vs positioning) → ML models tested out-of-sample → long/short portfolio and a live app. The key experiment: the same models with and without positioning.
 
 **Slide 3 — Status & roadmap (1 min 30)**
-- Done: full pipeline, online app updated monthly, first tests on free price data.
-- Next, by 31 Dec: richer positioning data (disaggregated COT), the ablation and robustness tests, then the final app and report.
+- Done: pipeline and online app updated monthly; faithful data (ETF returns + detailed CFTC report); first test with vs without positioning.
+- Next, by 31 Dec: robustness checks, sharper signals (feature selection, weekly data), then the final app and report.
