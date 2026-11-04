@@ -1,6 +1,6 @@
 {
   "source": "yahoo",
-  "run_utc": "2026-11-04T09:07:52+00:00",
+  "run_utc": "2026-11-04T10:51:34+00:00",
   "signal_date": "2026-10-30",
   "first_oos": "2014-06-30",
   "n_assets": 13,
@@ -64,5 +64,152 @@
   "refit_every": 12,
   "quantile": 0.3333333333333333,
   "importance_model": "RandomForest",
-  "warnings": []
+  "warnings": [],
+  "cot_check": {
+    "CANE": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "SUGAR NO. 11 - ICE FUTURES U.S.",
+        "SUGAR NO. 11 - NEW YORK BOARD OF TRADE"
+      ],
+      "disagg_names": [
+        "SUGAR NO. 11 - ICE FUTURES U.S.",
+        "SUGAR NO. 11 - NEW YORK BOARD OF TRADE"
+      ]
+    },
+    "CORN": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "CORN - CHICAGO BOARD OF TRADE"
+      ],
+      "disagg_names": [
+        "CORN - CHICAGO BOARD OF TRADE"
+      ]
+    },
+    "CPER": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "COPPER- #1 - COMMODITY EXCHANGE INC.",
+        "COPPER-GRADE #1 - COMMODITY EXCHANGE INC."
+      ],
+      "disagg_names": [
+        "COPPER- #1 - COMMODITY EXCHANGE INC.",
+        "COPPER-GRADE #1 - COMMODITY EXCHANGE INC."
+      ]
+    },
+    "GLD": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "GOLD - COMMODITY EXCHANGE INC."
+      ],
+      "disagg_names": [
+        "GOLD - COMMODITY EXCHANGE INC."
+      ]
+    },
+    "PALL": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "PALLADIUM - NEW YORK MERCANTILE EXCHANGE"
+      ],
+      "disagg_names": [
+        "PALLADIUM - NEW YORK MERCANTILE EXCHANGE"
+      ]
+    },
+    "PPLT": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "PLATINUM - NEW YORK MERCANTILE EXCHANGE"
+      ],
+      "disagg_names": [
+        "PLATINUM - NEW YORK MERCANTILE EXCHANGE"
+      ]
+    },
+    "SLV": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "SILVER - COMMODITY EXCHANGE INC."
+      ],
+      "disagg_names": [
+        "SILVER - COMMODITY EXCHANGE INC."
+      ]
+    },
+    "SOYB": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "SOYBEANS - CHICAGO BOARD OF TRADE"
+      ],
+      "disagg_names": [
+        "SOYBEANS - CHICAGO BOARD OF TRADE"
+      ]
+    },
+    "UGA": {
+      "weeks": 1081,
+      "first": "2006-02-14",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "GASOLINE RBOB - NEW YORK MERCANTILE EXCHANGE",
+        "GASOLINE BLENDSTOCK (RBOB) - NEW YORK MERCANTILE EXCHANGE"
+      ],
+      "disagg_names": [
+        "GASOLINE RBOB - NEW YORK MERCANTILE EXCHANGE",
+        "GASOLINE BLENDSTOCK (RBOB)  - NEW YORK MERCANTILE EXCHANGE",
+        "GASOLINE BLENDSTOCK (RBOB) - NEW YORK MERCANTILE EXCHANGE"
+      ]
+    },
+    "UNG": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "NAT GAS NYME - NEW YORK MERCANTILE EXCHANGE",
+        "NATURAL GAS - NEW YORK MERCANTILE EXCHANGE"
+      ],
+      "disagg_names": [
+        "NAT GAS NYME - NEW YORK MERCANTILE EXCHANGE",
+        "NATURAL GAS - NEW YORK MERCANTILE EXCHANGE"
+      ]
+    },
+    "USO": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "WTI-PHYSICAL - NEW YORK MERCANTILE EXCHANGE",
+        "CRUDE OIL, LIGHT SWEET - NEW YORK MERCANTILE EXCHANGE"
+      ],
+      "disagg_names": [
+        "WTI-PHYSICAL - NEW YORK MERCANTILE EXCHANGE",
+        "CRUDE OIL, LIGHT SWEET - NEW YORK MERCANTILE EXCHANGE"
+      ]
+    },
+    "WEAT": {
+      "weeks": 1087,
+      "first": "2006-01-03",
+      "last": "2026-10-27",
+      "legacy_names": [
+        "WHEAT-SRW - CHICAGO BOARD OF TRADE",
+        "WHEAT - CHICAGO BOARD OF TRADE"
+      ],
+      "disagg_names": [
+        "WHEAT-SRW - CHICAGO BOARD OF TRADE",
+        "WHEAT - CHICAGO BOARD OF TRADE"
+      ]
+    }
+  }
 }
