@@ -103,12 +103,12 @@ with tab_pos:
         c1.plotly_chart(px.bar(abl, x="Model", y="Mean IC", color="Information set", barmode="group",
                                category_orders=order, color_discrete_sequence=PALETTE, title="Mean OOS rank IC")
                         .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h", y=-0.2)),
-                        use_container_width=True)
+                        width="stretch")
         c2.plotly_chart(px.bar(abl, x="Model", y="Sharpe", color="Information set", barmode="group",
                                category_orders=order, color_discrete_sequence=PALETTE, title="Long/short Sharpe (net of costs)")
                         .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h", y=-0.2)),
-                        use_container_width=True)
-        st.dataframe(abl.set_index(["Model", "Information set"]).style.format("{:.3f}"), use_container_width=True)
+                        width="stretch")
+        st.dataframe(abl.set_index(["Model", "Information set"]).style.format("{:.3f}"), width="stretch")
         st.caption("Rule of thumb: |IC t-stat| < 2 means the signal is statistically indistinguishable from noise.")
     gbm_sets = [c for c in ["GBM [price only]", "GBM [positioning only]", "GBM"] if c in ic.columns]
     if gbm_sets:
@@ -116,7 +116,7 @@ with tab_pos:
         st.plotly_chart(px.line(ic[gbm_sets].rolling(24).mean(), color_discrete_sequence=PALETTE,
                                 labels={"value": "Spearman IC", "index": "", "variable": ""})
                         .add_hline(y=0, line_dash="dot").update_layout(height=340, legend=dict(orientation="h")),
-                        use_container_width=True)
+                        width="stretch")
 
 # ------------------------------------------------------------------ performance
 with tab_perf:
@@ -141,26 +141,26 @@ with tab_perf:
     fig = px.line(wealth, labels={"value": "Growth of 1", "index": "", "variable": ""},
                   color_discrete_sequence=PALETTE, log_y=log_scale)
     fig.update_layout(height=430, legend=dict(orientation="h", y=1.08), margin=dict(t=30, b=10))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     dd = wealth / wealth.cummax() - 1
     fig_dd = px.area(dd, labels={"value": "Drawdown", "index": "", "variable": ""},
                      color_discrete_sequence=PALETTE)
     fig_dd.update_traces(stackgroup=None, fill="tozeroy")
     fig_dd.update_layout(height=250, showlegend=False, margin=dict(t=10, b=10), yaxis_tickformat=".0%")
-    st.plotly_chart(fig_dd, use_container_width=True)
+    st.plotly_chart(fig_dd, width="stretch")
 
     st.subheader("Out-of-sample statistics")
     fmt = {c: "{:.1%}" for c in ["Ann. return", "Ann. vol", "Max DD", "Hit ratio"]}
     fmt.update({c: "{:.2f}" for c in ["Sharpe", "Sortino", "Avg turnover", "t-stat", "IC t-stat"]})
     fmt["Mean IC"] = "{:.3f}"
     st.dataframe(table.style.format(fmt, na_rep="–").background_gradient(subset=["Sharpe"], cmap="RdYlGn"),
-                 use_container_width=True)
+                 width="stretch")
 
     yearly = rets[sel].groupby(rets.index.year).apply(lambda x: (1 + x).prod() - 1)
     st.subheader("Calendar-year returns")
     st.dataframe(yearly.style.format("{:.1%}").background_gradient(cmap="RdYlGn", axis=None),
-                 use_container_width=True)
+                 width="stretch")
 
 # ------------------------------------------------------------------ live book
 with tab_live:
@@ -172,15 +172,15 @@ with tab_live:
                  color_discrete_sequence=PALETTE, labels={"Ensemble": "Ensemble score (rank)", "name": ""})
     fig.update_layout(height=650, margin=dict(t=10))
     c1, c2 = st.columns([3, 2])
-    c1.plotly_chart(fig, use_container_width=True)
+    c1.plotly_chart(fig, width="stretch")
     show = lv[["name", "sector", "side", "weight"] + [m for m in ML if m in lv]].sort_values("weight", ascending=False)
     c2.dataframe(show.style.format({"weight": "{:+.1%}", **{m: "{:.2f}" for m in ML}}),
-                 use_container_width=True, height=650)
+                 width="stretch", height=650)
     expo = lv.groupby("sector")["weight"].sum()
     st.plotly_chart(px.bar(expo, labels={"value": "Net weight", "sector": ""}, title="Net sector exposure",
                            color_discrete_sequence=PALETTE).update_layout(showlegend=False, height=300,
                                                                           yaxis_tickformat=".0%"),
-                    use_container_width=True)
+                    width="stretch")
 
 # ------------------------------------------------------------------ diagnostics
 with tab_diag:
@@ -191,7 +191,7 @@ with tab_diag:
         st.plotly_chart(px.line(ic[icsel].rolling(12).mean(), color_discrete_sequence=PALETTE,
                                 labels={"value": "Spearman IC", "index": "", "variable": ""})
                         .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h")),
-                        use_container_width=True)
+                        width="stretch")
     with c2:
         st.subheader(f"Feature importance ({meta.get('importance_model', 'best model')})")
         st.caption("Drop in mean OOS IC when the feature is shuffled within each month.")
@@ -201,16 +201,16 @@ with tab_diag:
         st.plotly_chart(px.bar(d, x="IC drop", y=d.index, color="Group", orientation="h",
                                color_discrete_sequence=PALETTE, labels={"y": ""})
                         .update_layout(height=520, margin=dict(l=10), legend=dict(orientation="h")),
-                        use_container_width=True)
+                        width="stretch")
     st.subheader("Signal correlation (average cross-sectional rank correlation)")
     sigs = [c for c in P.columns if c != "fwd_ret"]
     corr = P[sigs].groupby(level="date").corr(method="spearman").groupby(level=1).mean().loc[sigs, sigs]
     st.plotly_chart(px.imshow(corr, text_auto=".2f", color_continuous_scale="RdBu", zmin=-1, zmax=1)
-                    .update_layout(height=480), use_container_width=True)
+                    .update_layout(height=480), width="stretch")
     st.subheader("Monthly turnover")
     st.plotly_chart(px.line(turns.rolling(12).mean(), color_discrete_sequence=PALETTE,
                             labels={"value": "Turnover (12m avg)", "index": "", "variable": ""})
-                    .update_layout(height=300), use_container_width=True)
+                    .update_layout(height=300), width="stretch")
 
 # ------------------------------------------------------------------ factor explorer
 with tab_fact:
@@ -227,14 +227,14 @@ with tab_fact:
     c1.metric("HML t-stat", f"{hml.mean() / hml.std() * np.sqrt(hml.count()):.2f}")
     fig = go.Figure(go.Bar(x=[f"Q{i}" for i in ann.index], y=ann.values, marker_color=PALETTE[0]))
     fig.update_layout(title="Average annualised next-month return by bucket", yaxis_tickformat=".1%", height=330)
-    c2.plotly_chart(fig, use_container_width=True)
+    c2.plotly_chart(fig, width="stretch")
     tk = st.selectbox("Commodity", list(NAMES), format_func=lambda t: f"{NAMES[t]} ({SECTOR[t]})")
     raw = panel.xs(tk, level="ticker")
     rawcols = [c for c in raw.columns if c.startswith("raw_")]
     pick = st.multiselect("Raw characteristics", rawcols, default=[c for c in ["raw_hp", "raw_spec_net", "raw_mom_12_1"] if c in rawcols])
     st.plotly_chart(px.line(raw[pick], color_discrete_sequence=PALETTE,
                             labels={"value": "", "date": "", "variable": ""}).update_layout(height=350),
-                    use_container_width=True)
+                    width="stretch")
 
 # ------------------------------------------------------------------ methodology
 with tab_method:
