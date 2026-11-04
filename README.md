@@ -2,7 +2,7 @@
 
 **Does trader positioning help machine learning predict commodity returns?** This project combines price signals with the CFTC Commitments of Traders (who holds what: producers, swap dealers, hedge funds) for 13 single-commodity ETFs. Every model is tested strictly out-of-sample, and the dashboard updates itself every month.
 
-> emlyon MSc in Finance — *Machine Learning for Factor Investing* (G. Coqueret), 2026–27 project.
+> emlyon MSc in Finance — *Machine Learning for Finance* (G. Coqueret), 2026–27 project.
 > **🔗 Live app: [hguidon-hub-hguidon-commodity-lab.share.connect.posit.cloud](https://hguidon-hub-hguidon-commodity-lab.share.connect.posit.cloud)** · Author: Hugo Guidon
 
 ## Research question

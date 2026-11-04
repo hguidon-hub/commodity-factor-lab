@@ -122,7 +122,7 @@ with st.sidebar:
     vt = st.toggle("Target 10% volatility", value=True,
                    help="Scales every strategy to the same risk level, so their returns are comparable.")
     st.divider()
-    st.caption("Built by Hugo Guidon — emlyon MSc in Finance, *Machine Learning for Factor Investing* "
+    st.caption("Built by Hugo Guidon — emlyon MSc in Finance, *Machine Learning for Finance* "
                "(Prof. G. Coqueret). Educational project, not investment advice.")
 
 rets, turns = run_portfolios(str(RES), q, tc, inv_vol, 0.10 if vt else None)
