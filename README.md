@@ -1,6 +1,6 @@
 # 🛢️ Commodity Factor Lab
 
-**Does trader positioning help machine learning predict commodity returns?** This project combines price signals with the CFTC Commitments of Traders (who holds what: producers, swap dealers, hedge funds) for 26 commodity futures. Every model is tested strictly out-of-sample, and the dashboard updates itself every month.
+**Does trader positioning help machine learning predict commodity returns?** This project combines price signals with the CFTC Commitments of Traders (who holds what: producers, swap dealers, hedge funds) for 13 single-commodity ETFs. Every model is tested strictly out-of-sample, and the dashboard updates itself every month.
 
 > emlyon MSc in Finance — *Machine Learning for Factor Investing* (G. Coqueret), 2026–27 project.
 > **🔗 Live app: [hguidon-hub-hguidon-commodity-lab.share.connect.posit.cloud](https://hguidon-hub-hguidon-commodity-lab.share.connect.posit.cloud)** · Author: Hugo Guidon
@@ -14,15 +14,15 @@ Price-based commodity factors (momentum, reversal, volatility, skewness) are wel
 and the out-of-sample rank IC and long/short Sharpe ratios are compared.
 
 ## What it does
-1. **Data**: daily prices for 26 futures (energy, metals, grains, softs, livestock) from Yahoo Finance, plus two weekly **CFTC Commitments of Traders** reports (legacy and disaggregated, 2006 onward), all free and public.
+1. **Data**: daily adjusted prices of 13 single-commodity ETFs (USO, BNO, UNG, UGA, GLD, SLV, CPER, PPLT, PALL, CORN, WEAT, SOYB, CANE) from Yahoo Finance, plus two weekly **CFTC Commitments of Traders** reports (legacy and disaggregated, 2006 onward), all free and public.
 2. **Features**: 7 price features and up to 14 positioning features: hedging pressure, managed-money net position and crowding, producer and swap-dealer positioning, top-4 concentration. All are uniformised cross-sectionally.
 3. **Models**: Ridge, Random Forest, Gradient Boosting, MLP and a rank ensemble, trained walk-forward on an expanding window and refit every 12 months. Ridge and GBM are also trained on each feature group alone, for the ablation.
 4. **Portfolio**: long/short bucket sorts with inverse-vol weights, transaction costs and a 10% vol target, compared against single-factor benchmarks (momentum, hedging pressure, managed-money contrarian) and an equal-weight long-only basket.
 5. **App**: the ablation tab ("Does positioning help?"), performance, the current month's book, ICs, feature importance by group, a factor explorer and the methodology.
 6. **Self-updating**: a GitHub Action runs on the 3rd of each month and after every code change. It re-downloads the data, re-runs the models and commits the results, and Posit Connect Cloud then republishes the app.
 
-## Data limitation (assumed, documented)
-The returns come from Yahoo continuous **front-month** prices. These series ignore the roll between contracts, so return *levels* are approximations; the long-only basket is the most affected. Comparisons across signals (ICs, ablation) are less affected because every signal uses the same return series. A Bloomberg/Refinitiv loader with 1st and 2nd contracts (which unlocks the carry factor) is ready in `src/cfl/data.py` as an extension.
+## Why ETFs?
+ETF prices embed the cost of rolling the underlying futures (or of holding the metal), so their returns are what an investor actually earned. Continuous front-month futures series from free sources ignore the roll and distort return levels. The trade-off is a smaller cross-section (13 assets) and a history that starts around 2010. Each ETF is mapped to the CFTC report of its underlying contract. A futures universe and a Bloomberg/Refinitiv loader with 1st and 2nd contracts (which unlocks the carry factor) remain in `src/cfl/` as an extension.
 
 ## Quick start
 ```bash

@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .config import SECTOR
+from .config import RETURNS_ROLL_ADJUSTED, SECTOR
 from .data import clean_roll_jumps
 
 PRICE_FEATURES = ["rev_1m", "mom_3m", "mom_6m", "mom_12_1", "vol_3m", "skew_6m", "max_1m",
@@ -66,7 +66,7 @@ def _month_ends(idx: pd.DatetimeIndex) -> pd.DatetimeIndex:
 
 def price_features(px: pd.DataFrame, px2: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return (features long-format, monthly returns wide)."""
-    r = clean_roll_jumps(px)
+    r = px.pct_change(fill_method=None) if (RETURNS_ROLL_ADJUSTED and px2 is None) else clean_roll_jumps(px)
     me = _month_ends(r.dropna(how="all").index)
     logr = np.log1p(r.fillna(0.0))
     cum = logr.cumsum()

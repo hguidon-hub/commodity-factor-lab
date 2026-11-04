@@ -20,7 +20,9 @@ class Commodity:
     cot_code: str      # CFTC contract market code (legacy report). Empty = no COT data.
 
 
-UNIVERSE: list[Commodity] = [
+# Futures universe: Yahoo front-month continuous contracts (not roll-adjusted) or a Bloomberg export.
+# Kept for the Bloomberg/Refinitiv extension; the default study uses ETFS below.
+FUTURES_UNIVERSE: list[Commodity] = [
     # Energy
     Commodity("WTI Crude", "CL=F", "CL", "Energy", "067651"),
     Commodity("Brent Crude", "BZ=F", "CO", "Energy", ""),          # ICE: not in CFTC legacy report
@@ -54,10 +56,32 @@ UNIVERSE: list[Commodity] = [
     Commodity("Lean Hogs", "HE=F", "LH", "Livestock", "054642"),
 ]
 
+# Default universe: single-commodity ETFs. Their prices embed the roll of the underlying futures
+# (or physical holding for precious metals), so returns are investable and faithful, at the cost of
+# a smaller cross-section and shorter history (most launched 2006-2011).
+ETF_UNIVERSE: list[Commodity] = [
+    Commodity("WTI Crude (USO)", "USO", "", "Energy", "067651"),
+    Commodity("Brent Crude (BNO)", "BNO", "", "Energy", ""),          # ICE: no CFTC legacy data
+    Commodity("Natural Gas (UNG)", "UNG", "", "Energy", "023651"),
+    Commodity("Gasoline (UGA)", "UGA", "", "Energy", "111659"),
+    Commodity("Gold (GLD)", "GLD", "", "Metals", "088691"),
+    Commodity("Silver (SLV)", "SLV", "", "Metals", "084691"),
+    Commodity("Copper (CPER)", "CPER", "", "Metals", "085692"),
+    Commodity("Platinum (PPLT)", "PPLT", "", "Metals", "076651"),
+    Commodity("Palladium (PALL)", "PALL", "", "Metals", "075651"),
+    Commodity("Corn (CORN)", "CORN", "", "Grains", "002602"),
+    Commodity("Wheat (WEAT)", "WEAT", "", "Grains", "001602"),
+    Commodity("Soybeans (SOYB)", "SOYB", "", "Grains", "005602"),
+    Commodity("Sugar (CANE)", "CANE", "", "Softs", "080732"),
+]
+
+UNIVERSE = ETF_UNIVERSE
+RETURNS_ROLL_ADJUSTED = True   # ETF prices: no artificial roll jumps to filter
+
 BY_TICKER = {c.yf: c for c in UNIVERSE}
 TICKERS = [c.yf for c in UNIVERSE]
 SECTOR = {c.yf: c.sector for c in UNIVERSE}
 
 START_DATE = "2006-01-01"     # COT legacy yearly files are clean from 2006 on
-MIN_TRAIN_MONTHS = 60          # first out-of-sample month needs 5y of history
+MIN_TRAIN_MONTHS = 48          # first out-of-sample month needs 4y of history
 TC_BPS = 5                     # one-way transaction cost per unit of turnover (bps)

@@ -6,7 +6,7 @@ Goal: pitch the idea and the planned structure. No final results expected.
 Can machine learning tell which commodities will outperform next month, and does knowing **who holds what** (CFTC positioning) help? Commodities are less studied than stocks and close to how trading desks think.
 
 **Slide 2 — Planned structure (2 min)**
-Data (prices + CFTC positions since 2006) → factors (price vs positioning) → ML models tested out-of-sample → long/short portfolio and a live app. The key experiment: the same models with and without positioning.
+Data (13 commodity ETFs + CFTC positions) → factors (price vs positioning) → ML models tested out-of-sample → long/short portfolio and a live app. The key experiment: the same models with and without positioning.
 
 **Slide 3 — Status & roadmap (1 min 30)**
 - Done: full pipeline, online app updated monthly, first tests on free price data.

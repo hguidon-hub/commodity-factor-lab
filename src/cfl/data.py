@@ -15,24 +15,25 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import RAW_DIR, START_DATE, UNIVERSE, TICKERS
+from .config import FUTURES_UNIVERSE, RAW_DIR, START_DATE, UNIVERSE, TICKERS
 
 COT_URL = "https://www.cftc.gov/files/dea/history/deacot{year}.zip"
 
 
 # --------------------------------------------------------------------------- prices
 def download_prices(start: str = START_DATE, tickers: list[str] | None = None) -> pd.DataFrame:
-    """Daily front-month settlement prices from Yahoo Finance (continuous '=F' tickers).
+    """Daily prices from Yahoo Finance for the configured universe.
 
-    Caveat: Yahoo continuous series are NOT roll-adjusted -> roll days show artificial jumps.
-    We neutralise them in `clean_roll_jumps`. Use a Bloomberg export for a proper study.
+    Default universe = commodity ETFs, downloaded dividend/split-adjusted (auto_adjust), so returns are
+    investable total returns. With the futures universe ('=F' tickers) the series are NOT roll-adjusted
+    and `clean_roll_jumps` neutralises the roll days.
     """
     import yfinance as yf  # imported lazily so the rest of the package works offline
 
     import time
 
     tickers = tickers or TICKERS
-    raw = yf.download(tickers, start=start, auto_adjust=False, progress=False, group_by="column")
+    raw = yf.download(tickers, start=start, auto_adjust=True, progress=False, group_by="column")
     px = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
     px = px.reindex(columns=tickers).sort_index()
     px.index = pd.to_datetime(px.index).tz_localize(None)
@@ -43,7 +44,7 @@ def download_prices(start: str = START_DATE, tickers: list[str] | None = None) -
             break
         time.sleep(5 * (attempt + 1))
         for t in missing:
-            one = yf.download(t, start=start, auto_adjust=False, progress=False)
+            one = yf.download(t, start=start, auto_adjust=True, progress=False)
             if len(one):
                 close = one["Close"]
                 close = close.iloc[:, 0] if isinstance(close, pd.DataFrame) else close
@@ -58,20 +59,21 @@ def load_bloomberg_csv(path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame | N
 
     Expected: first column = date, other columns named like 'CL1', 'CL2', 'GC1', 'GC2'...
     Generic 1st contract -> front price, 2nd -> second nearby (unlocks the carry factor).
-    Columns are mapped back to Yahoo tickers via config.UNIVERSE[*].bbg.
+    Columns are mapped back to Yahoo futures tickers via config.FUTURES_UNIVERSE[*].bbg.
     """
     df = pd.read_csv(path, index_col=0, parse_dates=True).sort_index()
     df.columns = [c.replace(" Comdty", "").strip().upper() for c in df.columns]
     f1, f2 = {}, {}
-    for c in UNIVERSE:
+    for c in FUTURES_UNIVERSE:
         root = c.bbg.strip().upper()
         for col in df.columns:
             if col == f"{root}1":
                 f1[c.yf] = df[col]
             elif col == f"{root}2":
                 f2[c.yf] = df[col]
-    p1 = pd.DataFrame(f1).reindex(columns=TICKERS)
-    p2 = pd.DataFrame(f2).reindex(columns=TICKERS) if f2 else None
+    fut = [c.yf for c in FUTURES_UNIVERSE]
+    p1 = pd.DataFrame(f1).reindex(columns=fut)
+    p2 = pd.DataFrame(f2).reindex(columns=fut) if f2 else None
     return p1, p2
 
 

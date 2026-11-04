@@ -1,14 +1,14 @@
 ## Question
-Does **trader positioning**, as reported weekly by the CFTC, help machine learning rank commodity futures by next-month return, beyond what price-based signals already capture?
+Does **trader positioning**, as reported weekly by the CFTC, help machine learning rank commodities by next-month return, beyond what price-based signals already capture?
 
 ## Data
 | Block | Source | Frequency | Notes |
 |---|---|---|---|
-| Prices | Yahoo Finance continuous front-month futures (`CL=F`, `GC=F`, …) | daily → month-end | Large roll jumps neutralised with a robust MAD filter |
+| Prices | 13 single-commodity ETFs on Yahoo Finance (USO, UNG, GLD, CORN, …), dividend/split-adjusted | daily → month-end | Investable returns: the futures roll (or metal storage) is embedded |
 | Positioning (legacy) | CFTC Commitments of Traders, futures only: commercials vs non-commercials | weekly (Tuesday) | Lagged to the Friday release, +3 days: no look-ahead |
 | Positioning (disaggregated) | CFTC: producers/merchants, swap dealers, managed money, top-4 concentration | weekly, 2006+ | Same lag |
 
-Universe: 26 liquid futures across energy, metals, grains, softs and livestock. Brent (ICE) has no CFTC data.
+Universe: 13 ETFs across energy, metals, grains and softs, each mapped to the CFTC report of its underlying futures contract. Brent (BNO, ICE) has no CFTC data; its positioning features are set to neutral. The cross-section needs at least 8 ETFs, so the panel starts in 2010, and the first out-of-sample month comes after 48 months of training.
 
 ## Features (known at month-end *t*)
 - **Price (7):** reversal (1m), momentum (3m, 6m, 12-1m), realised volatility, skewness, max daily return.
@@ -28,15 +28,15 @@ Ridge regression, Random Forest, Gradient Boosting (histogram), MLP, and an **en
 **Ablation:** Ridge and GBM are re-trained on price features only and on positioning features only. If positioning carries information, the full model should beat the price-only model out-of-sample.
 
 ## Validation
-- **Expanding-window walk-forward**: 60 months of initial training, refit every 12 months, trained only on labels fully realised before the prediction date.
+- **Expanding-window walk-forward**: 48 months of initial training, refit every 12 months, trained only on labels fully realised before the prediction date.
 - Portfolios: long the top bucket, short the bottom bucket, with inverse-volatility weights, 100% gross per leg and transaction costs on turnover. An optional 10% ex-ante volatility target uses trailing 36-month vol, capped at 3× leverage.
 - Benchmarks: 12-1 momentum, hedging pressure (long when hedgers are net short), managed-money contrarian (fade crowded speculative longs), and an equal-weight long-only basket.
 - Diagnostics: monthly Spearman IC and its t-stat, permutation importance by feature and group, and turnover.
 
 ## Limitations
-- **Returns are approximate.** Yahoo continuous contracts are not roll-adjusted, so roll yield is missing and return levels are biased; the long-only basket is the most affected. Cross-sectional comparisons are more robust.
-- **No carry factor** without the second contract. It is empirically the strongest commodity premium, so its absence penalises the price-only side.
-- Small cross-section (about 25 assets): ICs are noisy, and an |IC t-stat| below 2 cannot be distinguished from zero.
+- **Small universe and short history.** 13 ETFs from 2010 onward: ICs are noisy, and an |IC t-stat| below 2 cannot be distinguished from zero.
+- **ETF frictions.** Management fees, tracking error and some structural changes (e.g. USO changing its roll policy in 2020) are embedded in the returns. No livestock, coffee, cocoa or cotton ETF has a long enough clean history.
+- **No carry factor** without second-contract prices. It is empirically the strongest commodity premium, so its absence penalises the price-only side.
 - Hyper-parameters were fixed a priori (no tuning) to limit overfitting.
 - Transaction costs are a flat bps assumption.
 

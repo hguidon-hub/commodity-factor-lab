@@ -108,7 +108,7 @@ with st.sidebar:
     if RES == DEMO:
         st.warning("Running on **synthetic demo data**.")
     st.markdown(f"**Signal date:** {meta['signal_date']}  \n**Last update:** {meta['run_utc'][:10]}  \n"
-                f"**Universe:** {meta['n_assets']} futures  \n**Data:** Yahoo prices + CFTC COT")
+                f"**Universe:** {meta['n_assets']} commodity ETFs  \n**Data:** ETF prices (Yahoo) + CFTC COT")
     st.divider()
     st.markdown("#### ⚙️ Portfolio settings")
     st.caption("These settings change every portfolio on the site, live.")
@@ -152,7 +152,7 @@ st.markdown(f"""
   hedge funds. This project tests whether that information, combined with classic price signals, lets
   machine-learning models predict which commodities will do best <b>next month</b>, using only data
   that was available at the time.</p>
-  <span class="pill" style="background:#FFE8CC;color:#B34700">{meta['n_assets']} commodity futures</span>
+  <span class="pill" style="background:#FFE8CC;color:#B34700">{meta['n_assets']} commodity ETFs</span>
   <span class="pill" style="background:#D0EBFF;color:#1450A3">{len(meta['features'])} signals</span>
   <span class="pill" style="background:#D3F9D8;color:#1E6B30">{years_oos:.0f} years tested out-of-sample</span>
   <span class="pill" style="background:#F3D9FA;color:#7B2A8F">updated every month</span>
@@ -167,8 +167,9 @@ with tab_home:
     st.markdown("### The idea in four steps")
     cols = st.columns(4)
     steps = [
-        ("Collect the data", f"Daily prices of {meta['n_assets']} futures (oil, gold, wheat, coffee, cattle…) and the "
-         "weekly CFTC report on traders' positions, since 2006.", PALETTE[0]),
+        ("Collect the data", f"Daily prices of {meta['n_assets']} single-commodity ETFs (oil, gas, gold, copper, "
+         "wheat, sugar…), which track real futures returns, and the weekly CFTC report on traders' positions.",
+         PALETTE[0]),
         ("Build signals", "Price signals (trend, reversal, volatility) and positioning signals (are hedge funds "
          "crowded? are producers hedging heavily?), ranked from 0 to 1 each month.", PALETTE[1]),
         ("Train ML models", "Linear model, random forest, gradient boosting and neural network. They are retrained every "
@@ -206,7 +207,7 @@ with tab_home:
     k3.metric("Best single-factor Sharpe",
               f"{table.loc[[b for b in table.index if b not in ML and '[' not in b and b != 'EW long-only'], 'Sharpe'].max():.2f}")
     k4.metric("Long-only basket Sharpe", f"{table.loc['EW long-only', 'Sharpe']:.2f}",
-              help="Approximate: Yahoo front-month prices ignore the roll between contracts.")
+              help="Buys every ETF in equal weight: the market reference, not a model.")
 
     st.markdown("### Glossary")
     g1, g2 = st.columns(2)
@@ -287,9 +288,9 @@ with tab_perf:
     st.caption("The cards above describe the best **machine-learning** model. The equal-weight long-only basket is a "
                "market reference, not a model: it bets on commodities going up, while the long/short strategies bet on "
                "some commodities beating others and are roughly market-neutral.")
-    st.info("Returns come from Yahoo continuous front-month prices, which ignore the roll between contracts. "
-            "Absolute levels (especially the long-only line) are approximations; comparisons between signals are "
-            "more reliable.", icon="⚠️")
+    st.info("Returns are those of single-commodity ETFs (USO, GLD, CORN…): they include the cost of rolling futures "
+            "contracts, so they are what an investor would actually have earned. The trade-off is a smaller "
+            "universe and a history starting around 2010.", icon="ℹ️")
     default = [s for s in ["Ensemble", best, "Momentum 12-1", "Hedging pressure", "Managed money contrarian",
                            "Carry", "EW long-only"] if s in rets.columns]
     sel = st.multiselect("Strategies to compare", strategies_all, default=list(dict.fromkeys(default)))
@@ -413,7 +414,9 @@ with tab_fact:
     c2.plotly_chart(fig, width="stretch")
 
     st.markdown("### One commodity's history")
-    tk = st.selectbox("Commodity", list(NAMES), format_func=lambda t: f"{NAMES[t]} ({SECTOR[t]})")
+    tickers_in_data = list(dict.fromkeys(panel.index.get_level_values("ticker")))
+    tk = st.selectbox("Commodity", tickers_in_data,
+                      format_func=lambda t: f"{NAMES.get(t, t)} ({SECTOR.get(t, '')})")
     raw = panel.xs(tk, level="ticker")
     rawcols = [c for c in raw.columns if c.startswith("raw_")]
     pick = st.multiselect("Signals to plot", rawcols, format_func=lambda c: c.replace("raw_", ""),
