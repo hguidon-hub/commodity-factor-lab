@@ -100,7 +100,7 @@ def run_portfolios(res: str, q: float, tc: float, inv_vol: bool, target: float |
     return rets, turns
 
 
-meta, P, panel, live, imp, ic, sel = load(str(RES))
+meta, P, panel, live, imp, ic, selected_df = load(str(RES))
 strategies_all = [c for c in P.columns if c != "fwd_ret"] + ["EW long-only"]
 
 # ------------------------------------------------------------------ sidebar
@@ -509,17 +509,17 @@ with tab_fact:
 with tab_method:
     st.markdown((ROOT / "docs" / "methodology.md").read_text())
 
-    if not sel.empty:
+    if not selected_df.empty:
         st.markdown("## Which signals did the selected model keep?")
         st.markdown("Before each yearly refit, the selected Ridge keeps the 6 signals with the strongest track record "
                     "**on the training data only** (highest |IC t-stat|), so no future information enters the choice. "
                     "Signals that come back year after year are the robust ones.")
-        counts = sel["features"].str.split(", ").explode().value_counts().rename("Years selected").to_frame()
+        counts = selected_df["features"].str.split(", ").explode().value_counts().rename("Years selected").to_frame()
         counts["Group"] = [feature_group(f) for f in counts.index]
         counts["Meaning"] = [FEATURE_DOC.get(f, "") for f in counts.index]
         st.dataframe(counts, width="stretch")
         with st.expander("Selection at each refit"):
-            st.dataframe(sel.drop(columns="model").set_index("refit"), width="stretch")
+            st.dataframe(selected_df.drop(columns="model").set_index("refit"), width="stretch")
 
     chk = meta.get("cot_check") or {}
     if chk:
