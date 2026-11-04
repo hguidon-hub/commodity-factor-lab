@@ -69,7 +69,7 @@ def test_incomplete_month_dropped():
 def test_feature_selection_in_window():
     from cfl.models import selection_zoo
     p = _panel()
-    P = bt.walk_forward(p, selection_zoo(4), refit_every=24, min_train=36)
+    P = bt.walk_forward(p, selection_zoo((4,)), refit_every=24, min_train=36)
     sel = P.attrs["selections"]["Ridge [selected 4]"]
     assert sel and all(len(fs) == 4 and set(fs) <= set(p.attrs["features"]) for fs in sel.values())
     # the first selection only uses data before the first refit date

@@ -352,7 +352,7 @@ with tab_rob:
     st.markdown("### Would the conclusions survive small changes?")
     st.markdown("A real signal should not depend on one lucky period, on unrealistically low costs or on one "
                 "precise portfolio rule. Each table below changes **one** ingredient and recomputes the strategies.")
-    cand = [c for c in ["Ridge [price only]", "Hedging pressure", "RandomForest", "Ensemble",
+    cand = [c for c in ["Ridge [selected 6]", "Ridge [price only]", "Hedging pressure", "RandomForest", "Ensemble",
                         "Ridge [positioning only]", "Momentum 12-1", "EW long-only"] if c in strategies_all]
     pick = st.multiselect("Strategies to stress-test", strategies_all, default=cand[:5])
     split = pd.Timestamp("2020-01-01")
@@ -394,8 +394,18 @@ with tab_rob:
     st.dataframe(pd.DataFrame(rule_rows).loc[[p_ for p_ in pick if p_ in table.index]].style.format("{:.2f}")
                  .background_gradient(cmap="RdYlGn", vmin=-1, vmax=1, axis=None), width="stretch")
 
+    ks = [c for c in ["Ridge [selected 4]", "Ridge [selected 6]", "Ridge [selected 8]", "Ridge [selected 10]", "Ridge"]
+          if c in table.index]
+    if len(ks) > 1:
+        st.markdown("**4. By number of selected signals** (Ridge keeping the k best signals of each training window)")
+        kt = table.loc[ks, ["Mean IC", "IC t-stat", "Sharpe"]].rename(index={"Ridge": "Ridge, all signals (no selection)"})
+        st.dataframe(kt.style.format({"Mean IC": "{:.3f}", "IC t-stat": "{:.2f}", "Sharpe": "{:.2f}"})
+                     .background_gradient(subset=["IC t-stat"], cmap="RdYlGn", vmin=-3, vmax=3), width="stretch")
+        st.caption("The main model uses k = 6, fixed in advance. If the result only held for k = 6 it would be luck; "
+                   "a result that stays positive for 4, 8 and 10 signals is a property of the data.")
+
     n_tests = int(table["IC t-stat"].notna().sum())
-    st.markdown("**4. The multiple-testing trap**")
+    st.markdown("**5. The multiple-testing trap**")
     st.markdown(f"This site compares **{n_tests} signals**. Even if none had any real skill, the chance that at least "
                 f"one shows |t| > 2 purely by luck is about **{1 - 0.954 ** n_tests:.0%}**. A stricter bar that "
                 f"accounts for this (Bonferroni) is roughly **t > 2.9**. A signal that is positive in both "
@@ -510,16 +520,33 @@ with tab_method:
     st.markdown((ROOT / "docs" / "methodology.md").read_text())
 
     if not selected_df.empty:
-        st.markdown("## Which signals did the selected model keep?")
-        st.markdown("Before each yearly refit, the selected Ridge keeps the 6 signals with the strongest track record "
-                    "**on the training data only** (highest |IC t-stat|), so no future information enters the choice. "
-                    "Signals that come back year after year are the robust ones.")
-        counts = selected_df["features"].str.split(", ").explode().value_counts().rename("Years selected").to_frame()
+        main_sel = selected_df[selected_df["model"] == "Ridge [selected 6]"] if "Ridge [selected 6]" in set(selected_df["model"]) else selected_df
+        st.markdown("## How the model picks its signals")
+        st.markdown("""With 24 signals and only 13 commodities, a model fed everything learns noise. So, once a year
+(each June, before retraining), the model **keeps only the signals that have worked so far**:
+
+1. **Look only at the past.** Take every month before the retraining date, nothing after it.
+2. **Score each signal on its own.** For every past month, compute the rank correlation (IC) between the
+   signal and the next month's returns of the 13 ETFs. A signal with a high IC put the right commodities on top.
+3. **Measure how reliable it was.** Turn that monthly IC series into a t-stat:
+   *t = average IC / standard deviation of IC × √(number of months)*. A high |t| means the signal worked
+   *consistently*, not in one lucky month. The sign does not matter: a signal that is reliably wrong is just as
+   useful, and the model learns to read it backwards.
+4. **Keep the 6 highest |t|** and train the Ridge on those 6 only.
+5. **Predict the next 12 months**, then repeat one year later with one more year of history.
+
+Because every choice uses past data only, the out-of-sample results are honest: the 2018 selection never saw
+2019. The number 6 was fixed in advance; the **Robustness** tab checks 4, 8 and 10 as well.""")
+        st.markdown("### Which signals were kept, and how often")
+        counts = main_sel["features"].str.split(", ").explode().value_counts().rename("Years selected").to_frame()
         counts["Group"] = [feature_group(f) for f in counts.index]
         counts["Meaning"] = [FEATURE_DOC.get(f, "") for f in counts.index]
         st.dataframe(counts, width="stretch")
+        st.caption(f"Out of {main_sel['refit'].nunique()} yearly refits. The Group column tells price from positioning "
+                   "signals. Known limit: each signal is judged alone, so two signals that say "
+                   "the same thing (e.g. mm_net and spec_net) can both be kept.")
         with st.expander("Selection at each refit"):
-            st.dataframe(selected_df.drop(columns="model").set_index("refit"), width="stretch")
+            st.dataframe(main_sel.drop(columns="model").set_index("refit"), width="stretch")
 
     chk = meta.get("cot_check") or {}
     if chk:

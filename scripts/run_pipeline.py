@@ -90,7 +90,7 @@ def main(argv=None):
     print(f"panel: {panel.shape}, {panel.index.get_level_values('date').nunique()} months, features={feats}")
 
     zoo = (model_zoo() | ablation_zoo(panel.attrs["price_features"], panel.attrs["positioning_features"])
-           | selection_zoo(6))
+           | selection_zoo((4, 6, 8, 10)))
     P = bt.walk_forward(panel, zoo, refit_every=a.refit_every, verbose=True)
     strategies = list(zoo) + ["Ensemble"] + [b for b in BENCHMARKS if b in P.columns]
     vol = panel["raw_vol_3m"]

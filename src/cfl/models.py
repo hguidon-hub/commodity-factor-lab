@@ -46,9 +46,12 @@ def ablation_zoo(price_feats: list[str], pos_feats: list[str], seed: int = 42) -
     return zoo
 
 
-def selection_zoo(k: int = 6) -> dict:
-    """Ridge on the k signals with the best track record in each training window (no look-ahead)."""
-    return {f"Ridge [selected {k}]": {"est": _ridge(), "select_k": k}}
+def selection_zoo(ks: tuple[int, ...] = (6,)) -> dict:
+    """Ridge on the k signals with the best track record in each training window (no look-ahead).
+
+    Several k are run so that the result can be checked for sensitivity to this choice.
+    """
+    return {f"Ridge [selected {k}]": {"est": _ridge(), "select_k": k} for k in ks}
 
 
 MAIN_MODELS = ["Ridge", "RandomForest", "GBM", "MLP"]

@@ -27,7 +27,7 @@ Ridge regression, Random Forest, Gradient Boosting (histogram), MLP, and an **en
 
 **Ablation:** Ridge and GBM are re-trained on price features only and on positioning features only. If positioning carries information, the full model should beat the price-only model out-of-sample.
 
-**Feature selection:** a further Ridge keeps, at each yearly refit, the 6 features with the highest |IC t-stat| on the training window only. This tests whether fewer, better-chosen inputs beat all 24, without any look-ahead (a unit test checks that the selection uses past data only).
+**Feature selection:** a further Ridge keeps, at each yearly refit, the 6 features with the highest |IC t-stat| on the training window only. This tests whether fewer, better-chosen inputs beat all 24, without any look-ahead (a unit test checks that the selection uses past data only). k = 6 is fixed in advance; k = 4, 8 and 10 are run as a sensitivity check. Limit: each signal is scored alone, so near-duplicates (managed money and non-commercials) can both be kept.
 
 ## Validation
 - **Expanding-window walk-forward**: 48 months of initial training, refit every 12 months, trained only on labels fully realised before the prediction date.
