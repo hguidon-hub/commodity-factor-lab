@@ -50,6 +50,9 @@ def get_data(source: str, bbg: str | None):
     except Exception as e:  # keep the legacy report only
         print(f"[warn] COT disaggregated download failed: {e!r}")
         WARNINGS.append(f"COT disaggregated: {e!r}"[:300])
+    lost = [t for t in px.columns if px[t].notna().sum() == 0]
+    if lost:
+        WARNINGS.append(f"No price data from Yahoo for: {', '.join(lost)}")
     dl.save(px, "prices")
     if cot is not None:
         cot.to_csv(dl.RAW_DIR / "cot.csv.gz", index=False)

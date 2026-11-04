@@ -29,12 +29,28 @@ def download_prices(start: str = START_DATE, tickers: list[str] | None = None) -
     """
     import yfinance as yf  # imported lazily so the rest of the package works offline
 
+    import time
+
     tickers = tickers or TICKERS
     raw = yf.download(tickers, start=start, auto_adjust=False, progress=False, group_by="column")
     px = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
     px = px.reindex(columns=tickers).sort_index()
     px.index = pd.to_datetime(px.index).tz_localize(None)
-    return px
+    # Yahoo sometimes drops a ticker from a batch request: retry the missing ones one by one
+    for attempt in range(3):
+        missing = [t for t in tickers if px[t].notna().sum() == 0]
+        if not missing:
+            break
+        time.sleep(5 * (attempt + 1))
+        for t in missing:
+            one = yf.download(t, start=start, auto_adjust=False, progress=False)
+            if len(one):
+                close = one["Close"]
+                close = close.iloc[:, 0] if isinstance(close, pd.DataFrame) else close
+                close.index = pd.to_datetime(close.index).tz_localize(None)
+                px = px.reindex(px.index.union(close.index))
+                px[t] = close
+    return px.sort_index()
 
 
 def load_bloomberg_csv(path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame | None]:
