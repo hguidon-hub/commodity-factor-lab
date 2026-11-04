@@ -8,7 +8,7 @@ Does **trader positioning**, as reported weekly by the CFTC, help machine learni
 | Positioning (legacy) | CFTC Commitments of Traders, futures only: commercials vs non-commercials | weekly (Tuesday) | Lagged to the Friday release, +3 days: no look-ahead |
 | Positioning (disaggregated) | CFTC: producers/merchants, swap dealers, managed money, top-4 concentration | weekly, 2006+ | Same lag |
 
-Universe: 13 ETFs across energy, metals, grains and softs, each mapped to the CFTC report of its underlying futures contract. Brent (BNO, ICE) has no CFTC data; its positioning features are set to neutral. The cross-section needs at least 8 ETFs, so the panel starts in 2010, and the first out-of-sample month comes after 48 months of training.
+Universe: 13 ETFs across energy, metals, grains and softs, each mapped to the CFTC report of its underlying futures contract. The market names actually matched are saved with every run and shown in the app, so a wrong contract code is visible. Brent (BNO, ICE) has no CFTC data; its positioning features are set to neutral. The cross-section needs at least 8 ETFs, so the panel starts in 2010, and the first out-of-sample month comes after 48 months of training.
 
 ## Features (known at month-end *t*)
 - **Price (7):** reversal (1m), momentum (3m, 6m, 12-1m), realised volatility, skewness, max daily return.
@@ -26,6 +26,8 @@ All features are **uniformised cross-sectionally** (rank → [0, 1]), following 
 Ridge regression, Random Forest, Gradient Boosting (histogram), MLP, and an **ensemble** that averages each model's cross-sectional rank. The label is the uniformised return of month *t+1*.
 
 **Ablation:** Ridge and GBM are re-trained on price features only and on positioning features only. If positioning carries information, the full model should beat the price-only model out-of-sample.
+
+**Feature selection:** a further Ridge keeps, at each yearly refit, the 6 features with the highest |IC t-stat| on the training window only. This tests whether fewer, better-chosen inputs beat all 24, without any look-ahead (a unit test checks that the selection uses past data only).
 
 ## Validation
 - **Expanding-window walk-forward**: 48 months of initial training, refit every 12 months, trained only on labels fully realised before the prediction date.
