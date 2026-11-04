@@ -170,8 +170,9 @@ with tab_live:
     lv["side"] = np.sign(lv["weight"]).map({1: "LONG", -1: "SHORT", 0: "–"})
     lv_sorted = lv.sort_values("Ensemble")
     fig = px.bar(lv_sorted, x="Ensemble", y="name", color="sector", orientation="h",
-                 color_discrete_sequence=PALETTE, labels={"Ensemble": "Ensemble score (rank)", "name": ""},
-                 category_orders={"name": lv_sorted["name"].tolist()[::-1]})   # keep score order across sectors
+                 color_discrete_sequence=PALETTE, labels={"Ensemble": "Ensemble score (rank)", "name": ""})
+    # plotly draws the first category at the bottom: ascending scores -> highest on top, across sectors
+    fig.update_yaxes(categoryorder="array", categoryarray=lv_sorted["name"].tolist())
     fig.update_layout(height=650, margin=dict(t=10), legend=dict(orientation="h", y=-0.08))
     c1, c2 = st.columns([3, 2])
     c1.plotly_chart(fig, width="stretch")
