@@ -8,6 +8,10 @@ on:
     branches: [main]
     paths: ["src/**", "scripts/**", "requirements.txt", ".github/workflows/**"]
 
+concurrency:                 # one update at a time: parallel runs would race to push results
+  group: monthly-update
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
