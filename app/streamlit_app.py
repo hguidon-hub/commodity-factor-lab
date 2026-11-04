@@ -158,8 +158,8 @@ st.markdown(f"""
   <span class="pill" style="background:#F3D9FA;color:#7B2A8F">updated every month</span>
 </div>""", unsafe_allow_html=True)
 
-tab_home, tab_pos, tab_perf, tab_live, tab_diag, tab_fact, tab_method = st.tabs(
-    ["🏠 Start here", "🧪 Does positioning help?", "📈 Performance", "🎯 This month's book",
+tab_home, tab_pos, tab_perf, tab_rob, tab_live, tab_diag, tab_fact, tab_method = st.tabs(
+    ["🏠 Start here", "🧪 Does positioning help?", "📈 Performance", "🛡️ Robustness", "🎯 This month's book",
      "🔬 Model diagnostics", "🧭 Factor explorer", "📚 Methodology"])
 
 # ------------------------------------------------------------------ start here
@@ -181,24 +181,36 @@ with tab_home:
         c.markdown(card(t, txt, col, f"STEP {i}"), unsafe_allow_html=True)
 
     st.markdown("### What the results say so far")
-    if not abl.empty:
-        g = abl[abl["Model"] == "GBM"].set_index("Information set")
-        best_t = ml_t.max()
-        if best_t < 2:
-            verdict = ("<b>No model beats chance with statistical confidence</b> (every |IC t-stat| is below 2). "
-                       "On this data, positioning does not add a reliable edge over price signals for a monthly "
-                       "cross-sectional strategy. An honest negative result is still a result: it says the "
-                       "public COT information is largely priced in at this horizon.")
-        else:
-            verdict = (f"<b>At least one model shows a statistically significant signal</b> "
-                       f"(max |IC t-stat| = {best_t:.1f}). See the next tab for which information set drives it.")
-        try:
-            verdict += (f"<br><br>Gradient boosting, mean rank IC: <b>{g.loc['Price only', 'Mean IC']:+.3f}</b> with prices only, "
-                        f"<b>{g.loc['Positioning only', 'Mean IC']:+.3f}</b> with positioning only, "
-                        f"<b>{g.loc['Price + positioning', 'Mean IC']:+.3f}</b> with both.")
-        except KeyError:
-            pass
-        st.markdown(f'<div class="verdict">{verdict}</div>', unsafe_allow_html=True)
+    sig = table.dropna(subset=["IC t-stat"])
+    n_tests = len(sig)
+    t_bonf = 2.9 if n_tests >= 10 else 2.6        # ~5% family-wise threshold for this many tests
+    passing = sig[sig["IC t-stat"] >= 2].sort_values("IC t-stat", ascending=False)
+    if passing.empty:
+        verdict = ("<b>No signal beats chance with statistical confidence</b> (every IC t-stat is below 2). "
+                   "On this data, neither prices nor positioning give a reliable edge for a monthly ranking strategy.")
+    else:
+        names = ", ".join(f"<b>{i}</b> (t = {r['IC t-stat']:.1f})" for i, r in passing.iterrows())
+        verdict = (f"<b>{len(passing)} of {n_tests} signals clear the usual t > 2 bar:</b> {names}. ")
+        verdict += ("At least one of them also survives a strict multiple-testing threshold (t > "
+                    f"{t_bonf}).") if (passing["IC t-stat"] >= t_bonf).any() else (
+                    f"None survives a strict multiple-testing threshold (t > {t_bonf}): with {n_tests} signals "
+                    "tested, one or two crossing t = 2 by luck is plausible, so these are encouraging, not proven.")
+    try:
+        r = abl[abl["Model"] == "Ridge"].set_index("Information set")["Mean IC"]
+        delta = r["Price + positioning"] - r["Price only"]
+        verdict += (f"<br><br><b>Does positioning help?</b> For the linear model, mean IC is {r['Price only']:+.3f} with "
+                    f"prices only, {r['Positioning only']:+.3f} with positioning only and {r['Price + positioning']:+.3f} "
+                    "with both: positioning "
+                    + ("adds information on top of prices." if delta > 0.005 else
+                       "carries signal on its own but overlaps with prices rather than adding to them." if r["Positioning only"] > 0.02
+                       else "adds little or nothing.")
+                    )
+    except KeyError:
+        pass
+    if "EW long-only" in table.index:
+        verdict += (f"<br><br>Reference: buying every commodity in equal weight earned a Sharpe of "
+                    f"{table.loc['EW long-only', 'Sharpe']:.2f} over the same period.")
+    st.markdown(f'<div class="verdict">{verdict}</div>', unsafe_allow_html=True)
 
     st.markdown("### Key numbers")
     k1, k2, k3, k4 = st.columns(4)
@@ -327,6 +339,65 @@ with tab_perf:
     yearly = rets[sel].groupby(rets.index.year).apply(lambda x: (1 + x).prod() - 1)
     st.markdown("### Calendar-year returns")
     st.dataframe(yearly.style.format("{:.1%}").background_gradient(cmap="RdYlGn", axis=None), width="stretch")
+
+# ------------------------------------------------------------------ robustness
+with tab_rob:
+    st.markdown("### Would the conclusions survive small changes?")
+    st.markdown("A real signal should not depend on one lucky period, on unrealistically low costs or on one "
+                "precise portfolio rule. Each table below changes **one** ingredient and recomputes the strategies.")
+    cand = [c for c in ["Ridge [price only]", "Hedging pressure", "RandomForest", "Ensemble",
+                        "Ridge [positioning only]", "Momentum 12-1", "EW long-only"] if c in strategies_all]
+    pick = st.multiselect("Strategies to stress-test", strategies_all, default=cand[:5])
+    split = pd.Timestamp("2020-01-01")
+
+    st.markdown("**1. By sub-period** (current settings)")
+    per = pd.DataFrame({
+        "Sharpe before 2020": bt.summary(rets[rets.index < split], turns)["Sharpe"],
+        "Sharpe 2020 onwards": bt.summary(rets[rets.index >= split], turns)["Sharpe"],
+        "Sharpe full period": table["Sharpe"],
+    }).loc[[p_ for p_ in pick if p_ in table.index]]
+    ic_per = pd.DataFrame({
+        "IC t-stat before 2020": ic[ic.index < split].pipe(
+            lambda x: x.mean() / x.std() * np.sqrt(x.count())),
+        "IC t-stat 2020 onwards": ic[ic.index >= split].pipe(lambda x: x.mean() / x.std() * np.sqrt(x.count())),
+    })
+    per = per.join(ic_per, how="left")
+    st.dataframe(per.style.format("{:.2f}").background_gradient(cmap="RdYlGn", vmin=-1, vmax=1, axis=None),
+                 width="stretch")
+
+    st.markdown("**2. By transaction cost** (Sharpe ratio)")
+    cost_rows = {}
+    for c_ in [0, 5, 10, 20, 30]:
+        r_, t_ = run_portfolios(str(RES), q, c_, inv_vol, 0.10 if vt else None)
+        cost_rows[f"{c_} bps"] = bt.summary(r_, t_)["Sharpe"]
+    costs = pd.DataFrame(cost_rows).loc[[p_ for p_ in pick if p_ in table.index]]
+    c1, c2 = st.columns([3, 2])
+    c1.plotly_chart(px.line(costs.T, markers=True, labels={"value": "Sharpe ratio", "index": "Cost", "variable": ""},
+                            title="Sharpe ratio as trading gets more expensive")
+                    .add_hline(y=0, line_color=INK, line_width=1)
+                    .update_layout(height=360, legend=dict(orientation="h", y=-0.2)), width="stretch")
+    c2.dataframe(costs.style.format("{:.2f}").background_gradient(cmap="RdYlGn", vmin=-1, vmax=1, axis=None),
+                 width="stretch")
+
+    st.markdown("**3. By portfolio rule** (Sharpe ratio for different bucket sizes)")
+    rule_rows = {}
+    for q_, lab in [(0.25, "Quartiles"), (1 / 3, "Terciles"), (0.5, "Halves")]:
+        r_, t_ = run_portfolios(str(RES), q_, tc, inv_vol, 0.10 if vt else None)
+        rule_rows[lab] = bt.summary(r_, t_)["Sharpe"]
+    st.dataframe(pd.DataFrame(rule_rows).loc[[p_ for p_ in pick if p_ in table.index]].style.format("{:.2f}")
+                 .background_gradient(cmap="RdYlGn", vmin=-1, vmax=1, axis=None), width="stretch")
+
+    n_tests = int(table["IC t-stat"].notna().sum())
+    st.markdown("**4. The multiple-testing trap**")
+    st.markdown(f"This site compares **{n_tests} signals**. Even if none had any real skill, the chance that at least "
+                f"one shows |t| > 2 purely by luck is about **{1 - 0.954 ** n_tests:.0%}**. A stricter bar that "
+                f"accounts for this (Bonferroni) is roughly **t > 2.9**. A signal that is positive in both "
+                "sub-periods, survives realistic costs and clears a high t-stat is far more credible than one good number.")
+    how_to_read("""
+- Green = Sharpe above zero, red = below. Look for strategies that stay **green across columns**.
+- The sub-period split (before / after 2020) separates a calm decade from the Covid and energy-crisis years.
+- Commodity ETFs are liquid: 5–10 bps per unit traded is a realistic cost; 30 bps is a pessimistic stress case.
+""")
 
 # ------------------------------------------------------------------ live book
 with tab_live:

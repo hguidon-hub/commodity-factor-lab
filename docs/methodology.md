@@ -12,12 +12,12 @@ Universe: 13 ETFs across energy, metals, grains and softs, each mapped to the CF
 
 ## Features (known at month-end *t*)
 - **Price (7):** reversal (1m), momentum (3m, 6m, 12-1m), realised volatility, skewness, max daily return.
-- **Positioning (up to 14):**
-  - commercials' hedging pressure (level and 3-year z-score);
+- **Positioning (up to 17):**
+  - commercials' hedging pressure (level, 3-year z-score and 1-month change);
   - non-commercials' net position and its change;
   - change in open interest;
   - managed-money net position (level, z-score, 1-month change, crowding = percentile of its own 3-year range);
-  - producer and swap-dealer net positions;
+  - producer and swap-dealer net positions, and their 1-month changes (flows);
   - top-4 traders' concentration.
 
 All features are **uniformised cross-sectionally** (rank → [0, 1]), following Coqueret & Guida (2020). Missing values are set to the neutral 0.5. The current month is dropped until it is complete.
@@ -32,6 +32,7 @@ Ridge regression, Random Forest, Gradient Boosting (histogram), MLP, and an **en
 - Portfolios: long the top bucket, short the bottom bucket, with inverse-volatility weights, 100% gross per leg and transaction costs on turnover. An optional 10% ex-ante volatility target uses trailing 36-month vol, capped at 3× leverage.
 - Benchmarks: 12-1 momentum, hedging pressure (long when hedgers are net short), managed-money contrarian (fade crowded speculative longs), and an equal-weight long-only basket.
 - Diagnostics: monthly Spearman IC and its t-stat, permutation importance by feature and group, and turnover.
+- Robustness: results split before / after 2020, transaction costs from 0 to 30 bps, quartile / tercile / half portfolios, and a multiple-testing check (with ~12 signals, a Bonferroni-style bar is t ≈ 2.9).
 
 ## Limitations
 - **Small universe and short history.** 13 ETFs from 2010 onward: ICs are noisy, and an |IC t-stat| below 2 cannot be distinguished from zero.

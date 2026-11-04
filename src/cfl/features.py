@@ -18,9 +18,9 @@ from .data import clean_roll_jumps
 
 PRICE_FEATURES = ["rev_1m", "mom_3m", "mom_6m", "mom_12_1", "vol_3m", "skew_6m", "max_1m",
                   "carry", "carry_chg_3m"]          # carry only with a 2nd-contract source
-LEGACY_COT = ["hp", "hp_z3y", "spec_net", "spec_net_chg_3m", "oi_chg_3m"]
+LEGACY_COT = ["hp", "hp_z3y", "hp_chg_1m", "spec_net", "spec_net_chg_3m", "oi_chg_3m"]
 DISAGG_COT = ["mm_net", "mm_net_z3y", "mm_net_chg_1m", "mm_crowding", "pm_net", "pm_net_z3y",
-              "swap_net", "conc4_long", "conc4_net"]
+              "pm_net_chg_1m", "swap_net", "swap_net_chg_1m", "conc4_long", "conc4_net"]
 POSITIONING_FEATURES = LEGACY_COT + DISAGG_COT
 ALL_FEATURES = PRICE_FEATURES + POSITIONING_FEATURES
 
@@ -36,6 +36,9 @@ FEATURE_DOC = {
     "carry_chg_3m": "3-month change in carry",
     "hp": "Hedging pressure: commercials' long share",
     "hp_z3y": "Hedging pressure, z-score vs own 3y history",
+    "hp_chg_1m": "1-month change in hedging pressure (hedgers' flow)",
+    "pm_net_chg_1m": "1-month change in producers' net position (flow)",
+    "swap_net_chg_1m": "1-month change in swap dealers' net position (flow)",
     "spec_net": "Non-commercials' net position / open interest",
     "spec_net_chg_3m": "3-month change in non-commercials' net position",
     "oi_chg_3m": "3-month log change in open interest",
@@ -128,6 +131,7 @@ def cot_features(cot: pd.DataFrame, month_ends: pd.DatetimeIndex) -> pd.DataFram
         m = g.reindex(g.index.union(month_ends)).ffill(limit=10).reindex(month_ends)
         if "hp" in m:
             m["hp_z3y"] = _z(m["hp"])
+            m["hp_chg_1m"] = m["hp"].diff(1)
             m["spec_net_chg_3m"] = m["spec_net"].diff(3)
             m["oi_chg_3m"] = m["log_oi"].diff(3)
             m = m.drop(columns="log_oi")
@@ -136,6 +140,8 @@ def cot_features(cot: pd.DataFrame, month_ends: pd.DatetimeIndex) -> pd.DataFram
             m["mm_net_chg_1m"] = m["mm_net"].diff(1)
             m["mm_crowding"] = _pct_range(m["mm_net"])
             m["pm_net_z3y"] = _z(m["pm_net"])
+            m["pm_net_chg_1m"] = m["pm_net"].diff(1)
+            m["swap_net_chg_1m"] = m["swap_net"].diff(1)
         m["ticker"] = tk
         out.append(m)
     f = pd.concat(out).rename_axis("date").reset_index().set_index(["date", "ticker"])
