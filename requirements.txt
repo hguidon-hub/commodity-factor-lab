@@ -3,7 +3,7 @@ pandas>=2.2
 scikit-learn>=1.4
 yfinance>=0.2.40
 requests>=2.31
-streamlit>=1.36
+streamlit==1.66.0   # pinned: newer releases broke widget loading on the hosted app
 plotly>=5.22
 matplotlib>=3.8
 pytest>=8.0
