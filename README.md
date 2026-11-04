@@ -3,7 +3,7 @@
 **Does trader positioning help machine learning predict commodity returns?** This project combines price signals with the CFTC Commitments of Traders (who holds what: producers, swap dealers, hedge funds) for 26 commodity futures. Every model is tested strictly out-of-sample, and the dashboard updates itself every month.
 
 > emlyon MSc in Finance — *Machine Learning for Factor Investing* (G. Coqueret), 2026–27 project.
-> **🔗 Live app: [Commodity Factor Lab on Posit Connect Cloud](https://01a1a58b-c43a-ef34-0344-2b909b7b9369.share.connect.posit.cloud)** · Author: Hugo Guidon
+> **🔗 Live app: [hguidon-hub-hguidon-commodity-lab.share.connect.posit.cloud](https://hguidon-hub-hguidon-commodity-lab.share.connect.posit.cloud)** · Author: Hugo Guidon
 
 ## Research question
 Price-based commodity factors (momentum, reversal, volatility, skewness) are well documented. Positioning data is specific to futures markets and much less used in ML studies. The core test is an **ablation**: the same models are trained on
