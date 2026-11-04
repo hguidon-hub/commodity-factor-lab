@@ -275,13 +275,18 @@ with tab_perf:
     st.markdown("### How would each strategy have performed?")
     best = table.loc[[s for s in ML if s in table.index], "Sharpe"].idxmax()
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Best ML model", best)
+    c1.metric("Best ML model (long/short)", best,
+              help="Best of the machine-learning models only. Benchmarks such as the long-only basket are not "
+                   "candidates: they are references to beat.")
     c2.metric("Sharpe (OOS)", f"{table.loc[best, 'Sharpe']:.2f}",
               f"{table.loc[best, 'Sharpe'] - table.loc['EW long-only', 'Sharpe']:+.2f} vs long-only")
     c3.metric("Annual return", f"{table.loc[best, 'Ann. return']:.1%}")
     c4.metric("Worst drawdown", f"{table.loc[best, 'Max DD']:.1%}")
     c5.metric("Mean IC", f"{table.loc[best, 'Mean IC']:.3f}" if pd.notna(table.loc[best].get("Mean IC")) else "–")
 
+    st.caption("The cards above describe the best **machine-learning** model. The equal-weight long-only basket is a "
+               "market reference, not a model: it bets on commodities going up, while the long/short strategies bet on "
+               "some commodities beating others and are roughly market-neutral.")
     st.info("Returns come from Yahoo continuous front-month prices, which ignore the roll between contracts. "
             "Absolute levels (especially the long-only line) are approximations; comparisons between signals are "
             "more reliable.", icon="⚠️")
