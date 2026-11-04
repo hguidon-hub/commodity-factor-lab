@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,11 +23,56 @@ from cfl.features import FEATURE_DOC, feature_group   # noqa: E402
 
 st.set_page_config(page_title="Commodity Factor Lab", page_icon="🛢️", layout="wide")
 
+# ------------------------------------------------------------------ look & feel
+INK, MUTED, PAPER, CARD, LINE = "#1F2933", "#52606D", "#FFFDF8", "#FFFFFF", "#E6E0D4"
+PALETTE = ["#E8590C", "#1C7ED6", "#2F9E44", "#AE3EC9", "#F59F00", "#0CA678", "#D6336C", "#5C7CFA", "#868E96"]
+SECTOR_COLORS = {"Energy": "#E8590C", "Metals": "#1C7ED6", "Grains": "#F59F00", "Softs": "#2F9E44",
+                 "Livestock": "#AE3EC9"}
+SET_COLORS = {"Price only": "#1C7ED6", "Positioning only": "#E8590C", "Price + positioning": "#2F9E44"}
+
+pio.templates["cfl"] = go.layout.Template(layout=dict(
+    font=dict(family="Inter, -apple-system, Segoe UI, sans-serif", color=INK, size=13),
+    paper_bgcolor=CARD, plot_bgcolor=CARD, colorway=PALETTE,
+    xaxis=dict(gridcolor="#F1ECE2", linecolor=LINE, zerolinecolor=LINE),
+    yaxis=dict(gridcolor="#F1ECE2", linecolor=LINE, zerolinecolor="#CBC3B3"),
+    legend=dict(bgcolor="rgba(0,0,0,0)"), margin=dict(t=40, b=20, l=10, r=10),
+    hoverlabel=dict(bgcolor="#FFFFFF", font_color=INK)))
+pio.templates.default = "plotly_white+cfl"
+
+st.markdown(f"""
+<style>
+.block-container {{padding-top: 2rem; max-width: 1400px;}}
+.hero {{background: linear-gradient(120deg, #FFF1E6 0%, #E7F5FF 55%, #EBFBEE 100%);
+        border: 1px solid {LINE}; border-radius: 18px; padding: 28px 32px; margin-bottom: 18px;}}
+.hero h1 {{font-size: 2.3rem; margin: 0 0 6px 0; color: {INK};}}
+.hero p {{font-size: 1.08rem; color: {MUTED}; margin: 0; max-width: 950px;}}
+.pill {{display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: .85rem; font-weight: 600;
+        margin: 12px 8px 0 0;}}
+.card {{background: {CARD}; border: 1px solid {LINE}; border-radius: 14px; padding: 18px 20px; height: 100%;}}
+.card h4 {{margin: 0 0 6px 0; font-size: 1.02rem;}}
+.card p {{margin: 0; color: {MUTED}; font-size: .95rem;}}
+.step {{font-weight: 700; font-size: .8rem; letter-spacing: .08em;}}
+.verdict {{border-left: 6px solid #E8590C; background: #FFF4E6; border-radius: 10px; padding: 16px 20px;
+           font-size: 1.05rem; color: {INK};}}
+div[data-testid="stMetric"] {{background: {CARD}; border: 1px solid {LINE}; border-radius: 14px; padding: 12px 16px;}}
+</style>""", unsafe_allow_html=True)
+
+
+def card(title: str, text: str, color: str, step: str | None = None) -> str:
+    s = f'<div class="step" style="color:{color}">{step}</div>' if step else ""
+    return f'<div class="card" style="border-top:5px solid {color}">{s}<h4>{title}</h4><p>{text}</p></div>'
+
+
+def how_to_read(text: str) -> None:
+    with st.expander("ℹ️ How to read this"):
+        st.markdown(text)
+
+
+# ------------------------------------------------------------------ data
 LIVE, DEMO = ROOT / "data" / "results", ROOT / "data" / "results_demo"
 RES = LIVE if (LIVE / "meta.json").exists() else DEMO
 NAMES = {c.yf: c.name for c in UNIVERSE}
 ML = ["Ridge", "RandomForest", "GBM", "MLP", "Ensemble"]
-PALETTE = px.colors.qualitative.Safe
 
 
 @st.cache_data
@@ -57,36 +103,33 @@ strategies_all = [c for c in P.columns if c != "fwd_ret"] + ["EW long-only"]
 
 # ------------------------------------------------------------------ sidebar
 with st.sidebar:
-    st.title("🛢️ Commodity Factor Lab")
-    st.caption("Does trader positioning (CFTC) help machine learning predict commodity returns?")
+    st.markdown("### 🛢️ Commodity Factor Lab")
+    st.caption("Does trader positioning help machine learning predict commodity returns?")
     if RES == DEMO:
-        st.warning("Running on **synthetic demo data**. Run the pipeline with `--source yahoo` for live results.")
-    st.markdown(f"**Signal date:** {meta['signal_date']}  \n**Last run:** {meta['run_utc'][:16]} UTC  \n"
-                f"**Universe:** {meta['n_assets']} futures  \n**Data:** {meta['source']}"
-                f"{' + CFTC COT' if meta['cot'] else ''}{' + carry' if meta['carry'] else ''}")
+        st.warning("Running on **synthetic demo data**.")
+    st.markdown(f"**Signal date:** {meta['signal_date']}  \n**Last update:** {meta['run_utc'][:10]}  \n"
+                f"**Universe:** {meta['n_assets']} futures  \n**Data:** Yahoo prices + CFTC COT")
     st.divider()
-    st.subheader("Portfolio construction")
+    st.markdown("#### ⚙️ Portfolio settings")
+    st.caption("These settings change every portfolio on the site, live.")
     q = st.select_slider("Long/short bucket", options=[0.2, 0.25, 1 / 3, 0.5], value=1 / 3,
-                         format_func=lambda x: {0.2: "Quintiles", 0.25: "Quartiles", 1/3: "Terciles", 0.5: "Halves"}[x])
-    tc = st.slider("Transaction cost (bps per unit turnover)", 0, 30, 5)
-    inv_vol = st.toggle("Inverse-volatility weights", value=True)
-    vt = st.toggle("Target 10% volatility", value=True)
+                         format_func=lambda x: {0.2: "Quintiles", 0.25: "Quartiles", 1/3: "Terciles", 0.5: "Halves"}[x],
+                         help="Terciles = buy the best third of commodities, sell the worst third.")
+    tc = st.slider("Transaction cost (bps per unit turnover)", 0, 30, 5,
+                   help="Cost charged each month on the traded amount. 5 bps = 0.05%.")
+    inv_vol = st.toggle("Inverse-volatility weights", value=True,
+                        help="Calmer commodities get a bigger weight, so that natural gas does not dominate the book.")
+    vt = st.toggle("Target 10% volatility", value=True,
+                   help="Scales every strategy to the same risk level, so their returns are comparable.")
     st.divider()
-    st.caption("Built by Hugo Guidon — emlyon MSc in Finance. Educational project, not investment advice.")
+    st.caption("Built by Hugo Guidon — emlyon MSc in Finance, *Machine Learning for Factor Investing* "
+               "(Prof. G. Coqueret). Educational project, not investment advice.")
 
 rets, turns = run_portfolios(str(RES), q, tc, inv_vol, 0.10 if vt else None)
-ic_cols = [c for c in ic.columns]
 table = bt.summary(rets, turns, ic)
 
-tab_pos, tab_perf, tab_live, tab_diag, tab_fact, tab_method = st.tabs(
-    ["🧪 Does positioning help?", "📈 Performance", "🎯 This month's book", "🔬 Model diagnostics",
-     "🧭 Factor explorer", "📚 Methodology"])
 
-# ------------------------------------------------------------------ research question
-with tab_pos:
-    st.subheader("Same models, three information sets")
-    st.caption("Each model is trained walk-forward on price features only, on CFTC positioning features only, "
-               "or on both. The gap between the bars is what positioning adds out-of-sample.")
+def ablation_rows() -> pd.DataFrame:
     rows = []
     for m in ["Ridge", "GBM"]:
         for label, name in [("Price only", f"{m} [price only]"), ("Positioning only", f"{m} [positioning only]"),
@@ -94,150 +137,287 @@ with tab_pos:
             if name in table.index:
                 rows.append({"Model": m, "Information set": label, "Mean IC": table.loc[name, "Mean IC"],
                              "IC t-stat": table.loc[name, "IC t-stat"], "Sharpe": table.loc[name, "Sharpe"]})
-    abl = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
+
+
+abl = ablation_rows()
+ml_t = table.loc[[c for c in table.index if c in ML or "[" in c], "IC t-stat"].abs()
+years_oos = (pd.Timestamp(meta["signal_date"]) - pd.Timestamp(meta["first_oos"])).days / 365.25
+
+# ------------------------------------------------------------------ hero
+st.markdown(f"""
+<div class="hero">
+  <h1>🛢️ Commodity Factor Lab</h1>
+  <p>Every week, the US regulator (CFTC) publishes <b>who holds what</b> in commodity futures: producers, banks,
+  hedge funds. This project tests whether that information, combined with classic price signals, lets
+  machine-learning models predict which commodities will do best <b>next month</b>, using only data
+  that was available at the time.</p>
+  <span class="pill" style="background:#FFE8CC;color:#B34700">{meta['n_assets']} commodity futures</span>
+  <span class="pill" style="background:#D0EBFF;color:#1450A3">{len(meta['features'])} signals</span>
+  <span class="pill" style="background:#D3F9D8;color:#1E6B30">{years_oos:.0f} years tested out-of-sample</span>
+  <span class="pill" style="background:#F3D9FA;color:#7B2A8F">updated every month</span>
+</div>""", unsafe_allow_html=True)
+
+tab_home, tab_pos, tab_perf, tab_live, tab_diag, tab_fact, tab_method = st.tabs(
+    ["🏠 Start here", "🧪 Does positioning help?", "📈 Performance", "🎯 This month's book",
+     "🔬 Model diagnostics", "🧭 Factor explorer", "📚 Methodology"])
+
+# ------------------------------------------------------------------ start here
+with tab_home:
+    st.markdown("### The idea in four steps")
+    cols = st.columns(4)
+    steps = [
+        ("Collect the data", f"Daily prices of {meta['n_assets']} futures (oil, gold, wheat, coffee, cattle…) and the "
+         "weekly CFTC report on traders' positions, since 2006.", PALETTE[0]),
+        ("Build signals", "Price signals (trend, reversal, volatility) and positioning signals (are hedge funds "
+         "crowded? are producers hedging heavily?), ranked from 0 to 1 each month.", PALETTE[1]),
+        ("Train ML models", "Linear model, random forest, gradient boosting and neural network. They are retrained every "
+         "year and only ever predict months they have not seen.", PALETTE[2]),
+        ("Build a portfolio", "Each month: buy the commodities with the best predicted ranks, sell the worst, "
+         "pay transaction costs, and track the result.", PALETTE[3]),
+    ]
+    for c, (t, txt, col), i in zip(cols, steps, range(1, 5)):
+        c.markdown(card(t, txt, col, f"STEP {i}"), unsafe_allow_html=True)
+
+    st.markdown("### What the results say so far")
+    if not abl.empty:
+        g = abl[abl["Model"] == "GBM"].set_index("Information set")
+        best_t = ml_t.max()
+        if best_t < 2:
+            verdict = ("<b>No model beats chance with statistical confidence</b> (every |IC t-stat| is below 2). "
+                       "On this data, positioning does not add a reliable edge over price signals for a monthly "
+                       "cross-sectional strategy. An honest negative result is still a result: it says the "
+                       "public COT information is largely priced in at this horizon.")
+        else:
+            verdict = (f"<b>At least one model shows a statistically significant signal</b> "
+                       f"(max |IC t-stat| = {best_t:.1f}). See the next tab for which information set drives it.")
+        try:
+            verdict += (f"<br><br>Gradient boosting, mean rank IC: <b>{g.loc['Price only', 'Mean IC']:+.3f}</b> with prices only, "
+                        f"<b>{g.loc['Positioning only', 'Mean IC']:+.3f}</b> with positioning only, "
+                        f"<b>{g.loc['Price + positioning', 'Mean IC']:+.3f}</b> with both.")
+        except KeyError:
+            pass
+        st.markdown(f'<div class="verdict">{verdict}</div>', unsafe_allow_html=True)
+
+    st.markdown("### Key numbers")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Out-of-sample period", f"{meta['first_oos'][:4]}–{meta['signal_date'][:4]}")
+    k2.metric("Best ML Sharpe (net)", f"{table.loc[[m for m in ML if m in table.index], 'Sharpe'].max():.2f}")
+    k3.metric("Best single-factor Sharpe",
+              f"{table.loc[[b for b in table.index if b not in ML and '[' not in b and b != 'EW long-only'], 'Sharpe'].max():.2f}")
+    k4.metric("Long-only basket Sharpe", f"{table.loc['EW long-only', 'Sharpe']:.2f}",
+              help="Approximate: Yahoo front-month prices ignore the roll between contracts.")
+
+    st.markdown("### Glossary")
+    g1, g2 = st.columns(2)
+    g1.markdown("""
+- **Long / short**: buy (bet it goes up) / sell (bet it goes down).
+- **Cross-sectional**: we rank commodities *against each other* each month, not against cash.
+- **Out-of-sample (OOS)**: results on months the model never saw during training.
+- **Walk-forward**: train on the past, predict the next months, move forward, retrain.
+- **Ablation**: removing one block of inputs to measure what it contributes.
+""")
+    g2.markdown("""
+- **IC (information coefficient)**: rank correlation between predictions and next-month returns. 0 = no skill; 0.05 is already good for monthly finance data.
+- **t-stat**: how many standard errors from zero. Below 2 ≈ could be luck.
+- **Sharpe ratio**: return per unit of risk (annualised). Above 0.5 is decent, above 1 is strong.
+- **COT report**: CFTC *Commitments of Traders*: positions of producers, swap dealers (banks), managed money (hedge funds).
+""")
+
+# ------------------------------------------------------------------ research question
+with tab_pos:
+    st.markdown("### Same models, three information sets")
+    st.markdown("Each model is trained three times: with **price signals only**, with **positioning signals only**, "
+                "and with **both**. If knowing who holds what adds information, the green bar should beat the blue one.")
     if abl.empty:
         st.info("Ablation results not available in this run.")
     else:
         c1, c2 = st.columns(2)
-        order = {"Information set": ["Price only", "Positioning only", "Price + positioning"]}
+        order = {"Information set": list(SET_COLORS)}
         c1.plotly_chart(px.bar(abl, x="Model", y="Mean IC", color="Information set", barmode="group",
-                               category_orders=order, color_discrete_sequence=PALETTE, title="Mean OOS rank IC")
-                        .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h", y=-0.2)),
+                               category_orders=order, color_discrete_map=SET_COLORS,
+                               title="Prediction skill: mean out-of-sample rank IC")
+                        .add_hline(y=0, line_color=INK, line_width=1)
+                        .update_layout(height=400, legend=dict(orientation="h", y=-0.18, title="")),
                         width="stretch")
         c2.plotly_chart(px.bar(abl, x="Model", y="Sharpe", color="Information set", barmode="group",
-                               category_orders=order, color_discrete_sequence=PALETTE, title="Long/short Sharpe (net of costs)")
-                        .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h", y=-0.2)),
+                               category_orders=order, color_discrete_map=SET_COLORS,
+                               title="Trading result: long/short Sharpe ratio, net of costs")
+                        .add_hline(y=0, line_color=INK, line_width=1)
+                        .update_layout(height=400, legend=dict(orientation="h", y=-0.18, title="")),
                         width="stretch")
-        st.dataframe(abl.set_index(["Model", "Information set"]).style.format("{:.3f}"), width="stretch")
-        st.caption("Rule of thumb: |IC t-stat| < 2 means the signal is statistically indistinguishable from noise.")
+        st.dataframe(abl.set_index(["Model", "Information set"]).style.format("{:.3f}")
+                     .background_gradient(subset=["IC t-stat"], cmap="RdYlGn", vmin=-3, vmax=3),
+                     width="stretch")
+    how_to_read("""
+- **Mean IC** measures pure prediction skill, before any trading. Bars above zero mean the model ranks
+  commodities better than chance on average.
+- **IC t-stat** says whether that skill is distinguishable from luck: |t| above 2 is the usual bar.
+- **Sharpe** shows what the skill is worth once turned into a long/short portfolio with costs.
+- Gradient boosting (GBM) can capture non-linear effects, such as "hedge funds extremely long", that a linear model (Ridge) cannot.
+""")
     gbm_sets = [c for c in ["GBM [price only]", "GBM [positioning only]", "GBM"] if c in ic.columns]
     if gbm_sets:
-        st.subheader("Rolling 24-month IC — GBM")
-        st.plotly_chart(px.line(ic[gbm_sets].rolling(24).mean(), color_discrete_sequence=PALETTE,
-                                labels={"value": "Spearman IC", "index": "", "variable": ""})
-                        .add_hline(y=0, line_dash="dot").update_layout(height=340, legend=dict(orientation="h")),
+        st.markdown("### Is the skill stable over time?")
+        roll = ic[gbm_sets].rolling(24).mean().rename(columns={"GBM [price only]": "Price only",
+                                                               "GBM [positioning only]": "Positioning only",
+                                                               "GBM": "Price + positioning"})
+        st.plotly_chart(px.line(roll, color_discrete_map=SET_COLORS,
+                                labels={"value": "Rank IC (24-month average)", "index": "", "variable": ""},
+                                title="Gradient boosting: rolling 24-month IC")
+                        .add_hline(y=0, line_color=INK, line_width=1)
+                        .update_layout(height=360, legend=dict(orientation="h", y=-0.15)),
                         width="stretch")
+        st.caption("A signal that is positive only in a few periods is fragile; a durable edge stays above zero.")
 
 # ------------------------------------------------------------------ performance
 with tab_perf:
+    st.markdown("### How would each strategy have performed?")
     best = table.loc[[s for s in ML if s in table.index], "Sharpe"].idxmax()
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Best ML model", best)
     c2.metric("Sharpe (OOS)", f"{table.loc[best, 'Sharpe']:.2f}",
-              f"{table.loc[best, 'Sharpe'] - table.loc['EW long-only', 'Sharpe']:+.2f} vs EW long")
-    c3.metric("Ann. return", f"{table.loc[best, 'Ann. return']:.1%}")
-    c4.metric("Max drawdown", f"{table.loc[best, 'Max DD']:.1%}")
+              f"{table.loc[best, 'Sharpe'] - table.loc['EW long-only', 'Sharpe']:+.2f} vs long-only")
+    c3.metric("Annual return", f"{table.loc[best, 'Ann. return']:.1%}")
+    c4.metric("Worst drawdown", f"{table.loc[best, 'Max DD']:.1%}")
     c5.metric("Mean IC", f"{table.loc[best, 'Mean IC']:.3f}" if pd.notna(table.loc[best].get("Mean IC")) else "–")
 
-    st.info("Returns are built from Yahoo continuous front-month prices: roll yield is not captured, so "
-            "absolute performance (and the long-only line in particular) is an approximation. Cross-sectional "
-            "comparisons between signals are more reliable than levels.", icon="⚠️")
+    st.info("Returns come from Yahoo continuous front-month prices, which ignore the roll between contracts. "
+            "Absolute levels (especially the long-only line) are approximations; comparisons between signals are "
+            "more reliable.", icon="⚠️")
     default = [s for s in ["Ensemble", best, "Momentum 12-1", "Hedging pressure", "Managed money contrarian",
-                           "Carry", "EW long-only"]
-               if s in rets.columns]
-    sel = st.multiselect("Strategies", strategies_all, default=list(dict.fromkeys(default)))
+                           "Carry", "EW long-only"] if s in rets.columns]
+    sel = st.multiselect("Strategies to compare", strategies_all, default=list(dict.fromkeys(default)))
     wealth = (1 + rets[sel].fillna(0)).cumprod()
     log_scale = st.toggle("Log scale", value=True)
-    fig = px.line(wealth, labels={"value": "Growth of 1", "index": "", "variable": ""},
-                  color_discrete_sequence=PALETTE, log_y=log_scale)
-    fig.update_layout(height=430, legend=dict(orientation="h", y=1.08), margin=dict(t=30, b=10))
+    fig = px.line(wealth, labels={"value": "Value of 1 invested", "index": "", "variable": ""}, log_y=log_scale,
+                  title="Growth of 1 unit invested (net of costs)")
+    fig.add_hline(y=1, line_color="#CBC3B3", line_dash="dot")
+    fig.update_layout(height=440, legend=dict(orientation="h", y=-0.15))
     st.plotly_chart(fig, width="stretch")
 
     dd = wealth / wealth.cummax() - 1
     fig_dd = px.area(dd, labels={"value": "Drawdown", "index": "", "variable": ""},
-                     color_discrete_sequence=PALETTE)
-    fig_dd.update_traces(stackgroup=None, fill="tozeroy")
-    fig_dd.update_layout(height=250, showlegend=False, margin=dict(t=10, b=10), yaxis_tickformat=".0%")
+                     title="Drawdown: loss from the previous peak")
+    fig_dd.update_traces(stackgroup=None, fill="tozeroy", line_width=1)
+    fig_dd.update_layout(height=260, showlegend=False, yaxis_tickformat=".0%")
     st.plotly_chart(fig_dd, width="stretch")
+    how_to_read("""
+- Each line is a **long/short** portfolio rebalanced monthly: long the best-ranked commodities, short the worst.
+  A flat line around 1 means the signal earns nothing; a rising line means it adds value.
+- **EW long-only** simply buys every commodity in equal weight, as a market reference.
+- **Momentum 12-1**, **Hedging pressure** and **Managed money contrarian** are classic one-signal rules from
+  the academic literature: the ML models have to beat them to justify their complexity.
+""")
 
-    st.subheader("Out-of-sample statistics")
+    st.markdown("### Full statistics")
     fmt = {c: "{:.1%}" for c in ["Ann. return", "Ann. vol", "Max DD", "Hit ratio"]}
     fmt.update({c: "{:.2f}" for c in ["Sharpe", "Sortino", "Avg turnover", "t-stat", "IC t-stat"]})
     fmt["Mean IC"] = "{:.3f}"
     st.dataframe(table.style.format(fmt, na_rep="–").background_gradient(subset=["Sharpe"], cmap="RdYlGn"),
                  width="stretch")
+    st.caption("Hit ratio = share of positive months. Turnover = share of the book traded each month (2 = full flip).")
 
     yearly = rets[sel].groupby(rets.index.year).apply(lambda x: (1 + x).prod() - 1)
-    st.subheader("Calendar-year returns")
-    st.dataframe(yearly.style.format("{:.1%}").background_gradient(cmap="RdYlGn", axis=None),
-                 width="stretch")
+    st.markdown("### Calendar-year returns")
+    st.dataframe(yearly.style.format("{:.1%}").background_gradient(cmap="RdYlGn", axis=None), width="stretch")
 
 # ------------------------------------------------------------------ live book
 with tab_live:
-    st.subheader(f"Ensemble positions for the month after {meta['signal_date']}")
-    st.caption("Long the top bucket, short the bottom bucket of the ensemble score. Weights per leg sum to 100% (before vol targeting).")
+    st.markdown(f"### What the models would hold for the month after {meta['signal_date']}")
+    st.markdown("The **ensemble** averages the four ML models. Commodities at the top are bought, those at the "
+                "bottom are sold; the middle is not traded.")
     lv = live.copy()
     lv["side"] = np.sign(lv["weight"]).map({1: "LONG", -1: "SHORT", 0: "–"})
     lv_sorted = lv.sort_values("Ensemble")
     fig = px.bar(lv_sorted, x="Ensemble", y="name", color="sector", orientation="h",
-                 color_discrete_sequence=PALETTE, labels={"Ensemble": "Ensemble score (rank)", "name": ""})
+                 color_discrete_map=SECTOR_COLORS, labels={"Ensemble": "Ensemble score (0 = worst, 1 = best)", "name": ""})
     # plotly draws the first category at the bottom: ascending scores -> highest on top, across sectors
     fig.update_yaxes(categoryorder="array", categoryarray=lv_sorted["name"].tolist())
-    fig.update_layout(height=650, margin=dict(t=10), legend=dict(orientation="h", y=-0.08))
+    fig.update_layout(height=680, legend=dict(orientation="h", y=-0.08, title=""))
     c1, c2 = st.columns([3, 2])
     c1.plotly_chart(fig, width="stretch")
     show = lv[["name", "sector", "side", "weight"] + [m for m in ML if m in lv]].sort_values("weight", ascending=False)
-    c2.dataframe(show.style.format({"weight": "{:+.1%}", **{m: "{:.2f}" for m in ML}}),
-                 width="stretch", height=650)
-    expo = lv.groupby("sector")["weight"].sum()
-    st.plotly_chart(px.bar(expo, labels={"value": "Net weight", "sector": ""}, title="Net sector exposure",
-                           color_discrete_sequence=PALETTE).update_layout(showlegend=False, height=300,
-                                                                          yaxis_tickformat=".0%"),
-                    width="stretch")
+    c2.dataframe(show.style.format({"weight": "{:+.1%}", **{m: "{:.2f}" for m in ML}})
+                 .map(lambda v: "color:#2F9E44;font-weight:600" if v == "LONG"
+                      else ("color:#D6336C;font-weight:600" if v == "SHORT" else ""), subset=["side"]),
+                 width="stretch", height=680)
+    expo = lv.groupby("sector")["weight"].sum().rename("Net weight").reset_index()
+    st.plotly_chart(px.bar(expo, x="sector", y="Net weight", color="sector", color_discrete_map=SECTOR_COLORS,
+                           title="Net exposure by sector (positive = net long)", labels={"sector": ""})
+                    .update_layout(showlegend=False, height=320, yaxis_tickformat=".0%"), width="stretch")
+    st.caption("Educational illustration of the model output, not a trading recommendation.")
 
 # ------------------------------------------------------------------ diagnostics
 with tab_diag:
+    st.markdown("### Under the hood")
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("Rolling 12-month IC")
-        icsel = st.multiselect("Signals", ic_cols, default=[c for c in ["Ensemble", "Momentum 12-1", "Hedging pressure"] if c in ic_cols])
-        st.plotly_chart(px.line(ic[icsel].rolling(12).mean(), color_discrete_sequence=PALETTE,
-                                labels={"value": "Spearman IC", "index": "", "variable": ""})
-                        .add_hline(y=0, line_dash="dot").update_layout(height=380, legend=dict(orientation="h")),
-                        width="stretch")
+        st.markdown("**Prediction skill over time (rolling 12-month IC)**")
+        icsel = st.multiselect("Signals", list(ic.columns),
+                               default=[c for c in ["Ensemble", "Momentum 12-1", "Managed money contrarian"] if c in ic.columns])
+        st.plotly_chart(px.line(ic[icsel].rolling(12).mean(),
+                                labels={"value": "Rank IC", "index": "", "variable": ""})
+                        .add_hline(y=0, line_color=INK, line_width=1)
+                        .update_layout(height=420, legend=dict(orientation="h", y=-0.15)), width="stretch")
     with c2:
-        st.subheader(f"Feature importance ({meta.get('importance_model', 'best model')})")
-        st.caption("Drop in mean OOS IC when the feature is shuffled within each month.")
+        st.markdown(f"**Which signals matter most? ({meta.get('importance_model', 'best model')})**")
         d = imp.sort_values().rename("IC drop").to_frame()
         d["Group"] = [feature_group(f) for f in d.index]
         d.index = [f"{f} — {FEATURE_DOC.get(f, '')}" for f in d.index]
         st.plotly_chart(px.bar(d, x="IC drop", y=d.index, color="Group", orientation="h",
-                               color_discrete_sequence=PALETTE, labels={"y": ""})
-                        .update_layout(height=520, margin=dict(l=10), legend=dict(orientation="h")),
-                        width="stretch")
-    st.subheader("Signal correlation (average cross-sectional rank correlation)")
+                               color_discrete_map={"Price": "#1C7ED6", "Positioning": "#E8590C"}, labels={"y": ""})
+                        .update_layout(height=560, legend=dict(orientation="h", y=-0.08, title="")), width="stretch")
+    how_to_read("""
+- **Feature importance**: each signal is shuffled at random, and we measure how much the model's IC drops.
+  A large drop means the model relies on that signal. Blue = price signals, orange = positioning signals.
+- **Rolling IC**: the skill of each signal year by year. Skill that comes and goes is typical of financial data.
+""")
+    st.markdown("**Do the signals say the same thing? (average rank correlation)**")
     sigs = [c for c in P.columns if c != "fwd_ret"]
     corr = P[sigs].groupby(level="date").corr(method="spearman").groupby(level=1).mean().loc[sigs, sigs]
     st.plotly_chart(px.imshow(corr, text_auto=".2f", color_continuous_scale="RdBu", zmin=-1, zmax=1)
-                    .update_layout(height=480), width="stretch")
-    st.subheader("Monthly turnover")
-    st.plotly_chart(px.line(turns.rolling(12).mean(), color_discrete_sequence=PALETTE,
-                            labels={"value": "Turnover (12m avg)", "index": "", "variable": ""})
-                    .update_layout(height=300), width="stretch")
+                    .update_layout(height=560), width="stretch")
+    st.caption("Close to 1 = two signals rank commodities the same way; close to 0 = they carry different information.")
+    st.markdown("**Trading intensity (monthly turnover, 12-month average)**")
+    st.plotly_chart(px.line(turns.rolling(12).mean(), labels={"value": "Turnover", "index": "", "variable": ""})
+                    .update_layout(height=320, legend=dict(orientation="h", y=-0.2)), width="stretch")
 
 # ------------------------------------------------------------------ factor explorer
 with tab_fact:
+    st.markdown("### Explore one signal at a time")
+    st.markdown("Pick a signal: every month the commodities are sorted into buckets by that signal, and we look at "
+                "their average return the **following** month. A staircase from left to right means the signal works.")
     feats = meta["features"]
     c1, c2 = st.columns([1, 3])
-    f = c1.selectbox("Characteristic", feats, format_func=lambda x: f"{x} — {FEATURE_DOC.get(x, '')}")
-    nq = c1.radio("Sort into", [3, 5], format_func=lambda n: f"{n} portfolios", horizontal=True)
+    f = c1.selectbox("Signal", feats, format_func=lambda x: f"{x} — {FEATURE_DOC.get(x, '')}")
+    c1.markdown(f"<span class='pill' style='background:{'#FFE8CC' if feature_group(f) == 'Positioning' else '#D0EBFF'}'>"
+                f"{feature_group(f)} signal</span>", unsafe_allow_html=True)
+    nq = c1.radio("Sort into", [3, 5], format_func=lambda n: f"{n} buckets", horizontal=True)
     d = panel.dropna(subset=["fwd_ret", f"raw_{f}"])[[f, "fwd_ret"]].copy()   # ignore neutral-filled gaps
     d["bucket"] = np.ceil(d[f] * nq).clip(1, nq).astype(int)
     port = d.groupby([d.index.get_level_values("date"), "bucket"])["fwd_ret"].mean().unstack()
     ann = port.mean() * 12
-    c1.metric("High-minus-low (ann.)", f"{ann.iloc[-1] - ann.iloc[0]:.1%}")
     hml = port.iloc[:, -1] - port.iloc[:, 0]
-    c1.metric("HML t-stat", f"{hml.mean() / hml.std() * np.sqrt(hml.count()):.2f}")
-    fig = go.Figure(go.Bar(x=[f"Q{i}" for i in ann.index], y=ann.values, marker_color=PALETTE[0]))
-    fig.update_layout(title="Average annualised next-month return by bucket", yaxis_tickformat=".1%", height=330)
+    c1.metric("High minus low (per year)", f"{ann.iloc[-1] - ann.iloc[0]:.1%}")
+    c1.metric("t-stat", f"{hml.mean() / hml.std() * np.sqrt(hml.count()):.2f}", help="Above 2 in absolute value = significant.")
+    colors = [PALETTE[1] if v >= 0 else PALETTE[6] for v in ann.values]
+    fig = go.Figure(go.Bar(x=[f"Q{i}" + (" (low)" if i == 1 else " (high)" if i == nq else "") for i in ann.index],
+                           y=ann.values, marker_color=colors))
+    fig.update_layout(title="Average next-month return by bucket (annualised)", yaxis_tickformat=".1%", height=360)
     c2.plotly_chart(fig, width="stretch")
+
+    st.markdown("### One commodity's history")
     tk = st.selectbox("Commodity", list(NAMES), format_func=lambda t: f"{NAMES[t]} ({SECTOR[t]})")
     raw = panel.xs(tk, level="ticker")
     rawcols = [c for c in raw.columns if c.startswith("raw_")]
-    pick = st.multiselect("Raw characteristics", rawcols, default=[c for c in ["raw_hp", "raw_spec_net", "raw_mom_12_1"] if c in rawcols])
-    st.plotly_chart(px.line(raw[pick], color_discrete_sequence=PALETTE,
-                            labels={"value": "", "date": "", "variable": ""}).update_layout(height=350),
-                    width="stretch")
+    pick = st.multiselect("Signals to plot", rawcols, format_func=lambda c: c.replace("raw_", ""),
+                          default=[c for c in ["raw_mm_net", "raw_pm_net", "raw_hp"] if c in rawcols])
+    st.plotly_chart(px.line(raw[pick].rename(columns=lambda c: c.replace("raw_", "")),
+                            labels={"value": "", "date": "", "variable": ""})
+                    .update_layout(height=360, legend=dict(orientation="h", y=-0.15)), width="stretch")
+    st.caption("mm_net = hedge funds' net position, pm_net = producers' net position, hp = hedgers' long share "
+               "(all as a share of open interest).")
 
 # ------------------------------------------------------------------ methodology
 with tab_method:
