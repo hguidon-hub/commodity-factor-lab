@@ -1,6 +1,6 @@
 {
   "source": "yahoo",
-  "run_utc": "2026-11-04T08:25:44+00:00",
+  "run_utc": "2026-11-04T09:07:52+00:00",
   "signal_date": "2026-10-30",
   "first_oos": "2014-06-30",
   "n_assets": 13,
@@ -14,6 +14,7 @@
     "max_1m",
     "hp",
     "hp_z3y",
+    "hp_chg_1m",
     "spec_net",
     "spec_net_chg_3m",
     "oi_chg_3m",
@@ -23,7 +24,9 @@
     "mm_crowding",
     "pm_net",
     "pm_net_z3y",
+    "pm_net_chg_1m",
     "swap_net",
+    "swap_net_chg_1m",
     "conc4_long",
     "conc4_net"
   ],
@@ -41,6 +44,7 @@
   "positioning_features": [
     "hp",
     "hp_z3y",
+    "hp_chg_1m",
     "spec_net",
     "spec_net_chg_3m",
     "oi_chg_3m",
@@ -50,7 +54,9 @@
     "mm_crowding",
     "pm_net",
     "pm_net_z3y",
+    "pm_net_chg_1m",
     "swap_net",
+    "swap_net_chg_1m",
     "conc4_long",
     "conc4_net"
   ],
