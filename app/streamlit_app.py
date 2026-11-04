@@ -168,9 +168,11 @@ with tab_live:
     st.caption("Long the top bucket, short the bottom bucket of the ensemble score. Weights per leg sum to 100% (before vol targeting).")
     lv = live.copy()
     lv["side"] = np.sign(lv["weight"]).map({1: "LONG", -1: "SHORT", 0: "–"})
-    fig = px.bar(lv.sort_values("Ensemble"), x="Ensemble", y="name", color="sector", orientation="h",
-                 color_discrete_sequence=PALETTE, labels={"Ensemble": "Ensemble score (rank)", "name": ""})
-    fig.update_layout(height=650, margin=dict(t=10))
+    lv_sorted = lv.sort_values("Ensemble")
+    fig = px.bar(lv_sorted, x="Ensemble", y="name", color="sector", orientation="h",
+                 color_discrete_sequence=PALETTE, labels={"Ensemble": "Ensemble score (rank)", "name": ""},
+                 category_orders={"name": lv_sorted["name"].tolist()[::-1]})   # keep score order across sectors
+    fig.update_layout(height=650, margin=dict(t=10), legend=dict(orientation="h", y=-0.08))
     c1, c2 = st.columns([3, 2])
     c1.plotly_chart(fig, width="stretch")
     show = lv[["name", "sector", "side", "weight"] + [m for m in ML if m in lv]].sort_values("weight", ascending=False)
