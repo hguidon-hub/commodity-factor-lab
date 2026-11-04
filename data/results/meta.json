@@ -1,9 +1,9 @@
 {
   "source": "yahoo",
-  "run_utc": "2026-11-04T07:19:23+00:00",
+  "run_utc": "2026-11-04T08:13:36+00:00",
   "signal_date": "2026-10-30",
   "first_oos": "2011-02-28",
-  "n_assets": 25,
+  "n_assets": 26,
   "features": [
     "rev_1m",
     "mom_3m",
